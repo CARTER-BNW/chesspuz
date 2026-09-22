@@ -39,6 +39,7 @@ NEXT_PUZZLE_MS = 900
 class RunPage(QWidget):
     home_requested = Signal()
     play_again_requested = Signal(str, object)  # player name, types
+    review_requested = Signal(int)  # run id
     run_ended = Signal(int)  # run id
 
     def __init__(
@@ -301,11 +302,14 @@ class RunPage(QWidget):
         choice = dialog.exec()
         if choice == GameOverDialog.PLAY_AGAIN:
             self.play_again_requested.emit(self.player.name, list(self.run.types))
+        elif choice == GameOverDialog.REVIEW:
+            self.review_requested.emit(self.run_id)
         else:
             self.home_requested.emit()
 
 
 class GameOverDialog(QDialog):
+    REVIEW = 3
     PLAY_AGAIN = 2
     HOME = 1
 
@@ -324,9 +328,12 @@ class GameOverDialog(QDialog):
         )
         details.setObjectName("muted")
         buttons = QDialogButtonBox()
+        review = buttons.addButton("Review run", QDialogButtonBox.ButtonRole.ActionRole)
         again = buttons.addButton("Play again", QDialogButtonBox.ButtonRole.AcceptRole)
         home = buttons.addButton("Home", QDialogButtonBox.ButtonRole.RejectRole)
         again.setObjectName("primary")
+        review.setEnabled(bool(run.results))
+        review.clicked.connect(lambda: self.done(self.REVIEW))
         again.clicked.connect(lambda: self.done(self.PLAY_AGAIN))
         home.clicked.connect(lambda: self.done(self.HOME))
         layout = QVBoxLayout(self)

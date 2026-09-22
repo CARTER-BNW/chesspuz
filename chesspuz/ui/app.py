@@ -94,21 +94,33 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.stack)
 
         from chesspuz.ui.home_page import HomePage
+        from chesspuz.ui.review_page import ReviewPage
         from chesspuz.ui.run_page import RunPage
 
         self.home = HomePage(ctx)
         self.run_page = RunPage(ctx, animation_ms=ctx.animation_ms())
-        self.stack.addWidget(self.home)
-        self.stack.addWidget(self.run_page)
+        self.review = ReviewPage(ctx, animation_ms=ctx.animation_ms())
+        for page in (self.home, self.run_page, self.review):
+            self.stack.addWidget(page)
 
         self.home.start_requested.connect(self.start_run)
         self.run_page.home_requested.connect(self.show_home)
         self.run_page.play_again_requested.connect(self.start_run)
+        self.run_page.review_requested.connect(self.show_review)
+        self.review.home_requested.connect(self.show_home)
         self.show_home()
 
     def show_home(self) -> None:
         self.home.refresh()
         self.stack.setCurrentWidget(self.home)
+
+    def show_review(self, run_id: int) -> None:
+        record = self.ctx.users.run(run_id)
+        if record is None:
+            self.show_home()
+            return
+        self.review.load(record, self.ctx.users.run_puzzles(run_id))
+        self.stack.setCurrentWidget(self.review)
 
     def start_run(self, player_name: str, types: Collection[str]) -> None:
         if self.ctx.puzzles is None:

@@ -57,10 +57,10 @@ Done when: `python main.py` plays a full run to three strikes on the real DB and
 
 ## Phase 6 - Review and explore
 Outcome: any saved run can be replayed puzzle by puzzle, with exploration and annotations.
-- [ ] ReviewModel (headless): puzzle list, cursor over the canonical line, player's line, variation stack, "back to solution"
-- [ ] Review page: run header, puzzle list (result, rating, types), board, move list, nav buttons + arrow keys, explore mode, annotations
-- [ ] Entry points: game-over dialog, leaderboard row, history row
-- [ ] Tests for ReviewModel navigation and branching; offscreen page smoke test
+- [x] ReviewModel (headless): puzzle list, cursor over the canonical line, player's line, variation stack, "back to solution"
+- [x] Review page: run header, puzzle list (result, rating, types), board, move list, nav buttons + arrow keys, explore mode, annotations
+- [x] Entry points: game-over dialog, leaderboard row, history row
+- [x] Tests for ReviewModel navigation and branching; offscreen page smoke test
 Done when: tests green and every puzzle of a saved run steps through; a variation can be played and abandoned.
 
 ## Phase 7 - Leaderboard, stats, settings, engine
