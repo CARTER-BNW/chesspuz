@@ -3,7 +3,10 @@
 Every FEN is the position *before* the opponent's move; ``moves[0]`` is that opponent move.
 """
 
+from dataclasses import replace
+
 from chesspuz.puzzle import Puzzle
+from chesspuz.themes import types_for
 
 # Black plays ...Ra4, White mates with Re8#.
 BACK_RANK = Puzzle(
@@ -76,5 +79,20 @@ EN_PASSANT = Puzzle(
     rating=700,
     themes=frozenset({"enPassant"}),
 )
+
+
+def _with_types(puzzle: Puzzle) -> Puzzle:
+    """Give a fixture the chess.com types the importer would derive for it."""
+    return replace(puzzle, types=types_for(puzzle.fen, puzzle.moves, puzzle.themes))
+
+
+BACK_RANK = _with_types(BACK_RANK)
+SMOTHERED = _with_types(SMOTHERED)
+TWO_ROOKS = _with_types(TWO_ROOKS)
+SCHOLAR = _with_types(SCHOLAR)
+OPPOSITION = _with_types(OPPOSITION)
+UNDER_PROMOTION = _with_types(UNDER_PROMOTION)
+CASTLE = _with_types(CASTLE)
+EN_PASSANT = _with_types(EN_PASSANT)
 
 ALL = (BACK_RANK, SMOTHERED, TWO_ROOKS, SCHOLAR, OPPOSITION, UNDER_PROMOTION, CASTLE, EN_PASSANT)

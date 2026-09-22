@@ -32,10 +32,10 @@ Done when: `python main.py import tests/data/sample.csv --db <tmp>` then `stats`
 
 ## Phase 3 - User database and persistence
 Outcome: runs, puzzles played, players and settings persist crash-safely; leaderboard and stats queries exist.
-- [ ] `chesspuz/userdb.py`: schema (players, runs, run_puzzles, settings), WAL, migrations by version
-- [ ] Run lifecycle: insert `active` at start, commit each puzzle as it finishes, finalise at end, `abandoned` cleanup on startup
-- [ ] Queries: leaderboard (score desc, time asc, same type set), history per player, per-type accuracy, seen puzzle ids
-- [ ] Tests: scripted headless run persists N rows and a leaderboard entry; simulated kill leaves `abandoned`
+- [x] `chesspuz/userdb.py`: schema (players, runs, run_puzzles, settings), WAL, migrations by version
+- [x] Run lifecycle: insert `active` at start, commit each puzzle as it finishes, finalise at end, `abandoned` cleanup on startup
+- [x] Queries: leaderboard (score desc, time asc, same type set), history per player, per-type accuracy, seen puzzle ids
+- [x] Tests: scripted headless run persists N rows and a leaderboard entry; simulated kill leaves `abandoned`
 Done when: `python -m pytest -q` is green including the persistence tests.
 
 ## Phase 4 - Board widget

@@ -24,8 +24,8 @@ database (CC0), imported once into a local SQLite file and filtered by the 19 ch
 - A wrong move loses one life, the puzzle is marked failed, the remaining solution auto-plays, and
   the next puzzle starts. Three lost lives end the run.
 - Pawns reaching the last rank always open a promotion chooser; never auto-queen.
-- Difficulty: puzzle number i (0-based) targets rating `start + i * step` (defaults 600, 40, cap
-  3000). Pick a random unseen puzzle within +/-75 of the target matching the chosen types; widen to
+- Difficulty: with `n` puzzles solved so far the next puzzle targets rating `start + n * step`
+  (defaults 600, 40, cap 3000); a failed puzzle does not raise the difficulty. Pick a random unseen puzzle within +/-75 of the target matching the chosen types; widen to
   +/-150, +/-300, any rating, then allow seen puzzles. A run never ends for lack of puzzles.
 - Score = puzzles solved. Leaderboard order: score desc, then total solving time asc. Only runs
   with the same type selection are compared.

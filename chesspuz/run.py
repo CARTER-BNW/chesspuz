@@ -39,7 +39,7 @@ class RampSettings:
     floor: int = 400
 
     def target(self, index: int) -> int:
-        """Target rating for the puzzle at 0-based position ``index`` in the run."""
+        """Target rating after ``index`` puzzles have been solved."""
         return max(self.floor, min(self.cap, self.start + index * self.step))
 
     def windows(self, index: int) -> Iterator[Window]:
@@ -109,7 +109,8 @@ class SurvivalRun:
 
     @property
     def target_rating(self) -> int:
-        return self._target if self.playing else self.ramp.target(self.index)
+        """Difficulty follows the score: puzzles get harder the more you get right."""
+        return self._target if self.playing else self.ramp.target(self.score)
 
     @property
     def playing(self) -> bool:
@@ -124,7 +125,7 @@ class SurvivalRun:
         if self.playing:
             raise RuntimeError("the current puzzle is still being solved")
         puzzle = self._pick()
-        self._target = self.ramp.target(self.index)
+        self._target = self.ramp.target(self.score)
         self.seen.add(puzzle.id)
         self.session = PuzzleSession(puzzle)
         self.mark_started()
@@ -153,7 +154,7 @@ class SurvivalRun:
     # -- internals -----------------------------------------------------------------------------
 
     def _pick(self) -> Puzzle:
-        for window in self.ramp.windows(self.index):
+        for window in self.ramp.windows(self.score):
             exclude = frozenset() if window.allow_seen else frozenset(self.seen)
             puzzle = self.pick(window.lo, window.hi, self.types, exclude)
             if puzzle is not None:
