@@ -499,6 +499,27 @@ class UserDB:
         out.sort(key=lambda m: not m.still_wrong)  # stable: still-wrong first, newest first
         return out
 
+    def best_streak(self, player_id: int | None = None) -> int:
+        """Longest run of consecutive clean solves inside one Survival run, ever."""
+        sql = (
+            "SELECT rp.run_id, rp.result FROM run_puzzles rp JOIN runs r ON r.id = rp.run_id"
+            " WHERE r.mode = ?"
+        )
+        params: list[object] = [SURVIVAL]
+        if player_id is not None:
+            sql += " AND r.player_id = ?"
+            params.append(player_id)
+        sql += " ORDER BY rp.run_id, rp.seq"
+        best = current = 0
+        last_run = None
+        for row in self._db.execute(sql, params):
+            if row["run_id"] != last_run:
+                current = 0
+                last_run = row["run_id"]
+            current = current + 1 if row["result"] == "solved" else 0
+            best = max(best, current)
+        return best
+
     def played_puzzles(self, player_id: int, limit: int = 500) -> list[PlayedRecord]:
         """Every attempt by a player, newest first."""
         rows = self._db.execute(

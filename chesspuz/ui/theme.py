@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QPalette
+from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication
 
 from chesspuz.ui.annotations import Brush
@@ -45,20 +45,62 @@ ACCENT_TEXT = QColor("#ffffff")
 DANGER = QColor("#e57373")
 SUCCESS = QColor("#81c784")
 
-QSS = """
+_QSS_TEMPLATE = """
 QToolTip { color: #e8eaed; background-color: #303134; border: 1px solid #5f6368; }
-QPushButton { padding: 6px 14px; border-radius: 4px; border: 1px solid #5f6368; }
+QPushButton { padding: {pad_v}px {pad_h}px; border-radius: 4px; border: 1px solid #5f6368; }
 QPushButton:hover { background-color: #3c4043; }
 QPushButton:pressed { background-color: #4a4d51; }
 QPushButton:disabled { color: #6f7378; border-color: #3c4043; }
 QPushButton#primary { background-color: #7cb342; color: white; border: none; font-weight: bold; }
 QPushButton#primary:hover { background-color: #8bc34a; }
-QLabel#title { font-size: 26px; font-weight: bold; }
+QLabel#title { font-size: {title}px; font-weight: bold; }
 QLabel#muted { color: #9aa0a6; }
-QLabel#big { font-size: 20px; font-weight: bold; }
+QLabel#big { font-size: {big}px; font-weight: bold; }
 QHeaderView::section { background-color: #303134; padding: 4px; border: none; }
 QTableView { gridline-color: #3c4043; }
 """
+
+DEFAULT_POINT_SIZE = 9
+_scale = 1.0
+_base_points = DEFAULT_POINT_SIZE
+
+
+def base_point_size() -> int:
+    """The application's default font size before any text-size setting is applied."""
+    return _base_points
+
+
+def text_scale() -> float:
+    return _scale
+
+
+def px(base: int) -> int:
+    """Scale a pixel size designed at the default text size."""
+    return max(1, round(base * _scale))
+
+
+def qss() -> str:
+    return (
+        _QSS_TEMPLATE.replace("{title}", str(px(26)))
+        .replace("{big}", str(px(20)))
+        .replace("{pad_v}", str(px(6)))
+        .replace("{pad_h}", str(px(14)))
+    )
+
+
+def apply_text_size(app: QApplication, points: int | None) -> None:
+    """Set the application font size (None or 0 = the default) and rescale the stylesheet."""
+    global _scale
+    points = int(points or 0) or _base_points
+    points = max(6, min(24, points))
+    font = QFont(app.font())
+    font.setPointSize(points)
+    app.setFont(font)
+    _scale = points / _base_points
+    app.setStyleSheet(qss())
+
+
+QSS = qss()
 
 
 def apply_dark_theme(app: QApplication) -> None:
@@ -88,4 +130,7 @@ def apply_dark_theme(app: QApplication) -> None:
     palette.setColor(disabled, roles.ButtonText, MUTED)
     palette.setColor(disabled, roles.WindowText, MUTED)
     app.setPalette(palette)
-    app.setStyleSheet(QSS)
+    global _base_points
+    size = app.font().pointSize()
+    _base_points = size if size > 0 else DEFAULT_POINT_SIZE
+    app.setStyleSheet(qss())

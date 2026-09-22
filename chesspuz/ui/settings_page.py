@@ -1,28 +1,38 @@
-"""Settings page: difficulty ramp, board options, engine path and the puzzle database."""
+"""Settings page: difficulty, board, sounds, text size, engine, data and the puzzle database."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import Signal
+import chess
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QCheckBox,
+    QColorDialog,
+    QComboBox,
     QFileDialog,
     QFormLayout,
+    QGridLayout,
     QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSlider,
     QSpinBox,
     QVBoxLayout,
     QWidget,
 )
 
-from chesspuz import paths
+from chesspuz import paths, sounds
 from chesspuz.importer import ImportSettings
 from chesspuz.run import RampSettings
+from chesspuz.ui import theme
 from chesspuz.ui.app import AppContext
+from chesspuz.ui.board import BoardWidget
+from chesspuz.ui.pieces import DEFAULT_BLACK, DEFAULT_WHITE, PieceCache, normalize_color
 from chesspuz.ui.workers import ImportWorker
 
 DEFAULTS = {
@@ -31,13 +41,35 @@ DEFAULTS = {
     "window": RampSettings().window,
     "animation_ms": 200,
     "per_type": ImportSettings().per_bucket_type,
+    "text_size": 0,  # 0 = the system default
 }
+COLOR_KEYS = {
+    "board_light": ("Light squares", theme.SQUARE_LIGHT.name()),
+    "board_dark": ("Dark squares", theme.SQUARE_DARK.name()),
+    "piece_white": ("White pieces", DEFAULT_WHITE),
+    "piece_black": ("Black pieces", DEFAULT_BLACK),
+}
+SOUND_LABELS = {
+    "click": "Click",
+    "move": "Piece move",
+    "capture": "Capture",
+    "correct": "Correct",
+    "wrong": "Wrong",
+}
+ALL_PLAYERS = "All players"
+
+
+def color_setting(ctx: AppContext, key: str) -> str:
+    """The stored colour for ``key`` as ``#rrggbb`` (default when unset or invalid)."""
+    default = COLOR_KEYS[key][1]
+    return normalize_color(ctx.setting(key, default), default)
 
 
 class SettingsPage(QWidget):
     home_requested = Signal()
     changed = Signal()  # any setting changed
     database_changed = Signal()  # the puzzle database was rebuilt
+    data_cleared = Signal()  # runs were deleted
 
     def __init__(self, ctx: AppContext, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -65,13 +97,69 @@ class SettingsPage(QWidget):
         self.animation_spin = self._spin(0, 600, 50)
         self.coordinates_box = QCheckBox("Show coordinates")
         self.coordinates_box.toggled.connect(self._save)
-        self.sounds_box = QCheckBox("Sounds (clicks, moves, captures, correct, wrong)")
-        self.sounds_box.toggled.connect(self._save)
+        self.color_buttons: dict[str, QPushButton] = {}
+        colors = QGridLayout()
+        for row, (key, (label, _default)) in enumerate(COLOR_KEYS.items()):
+            button = QPushButton()
+            button.setFixedWidth(120)
+            button.clicked.connect(lambda _checked=False, k=key: self._pick_color(k))
+            self.color_buttons[key] = button
+            colors.addWidget(QLabel(label), row, 0)
+            colors.addWidget(button, row, 1)
+        reset_colors = QPushButton("Reset colours")
+        reset_colors.clicked.connect(self._reset_colors)
+        colors.addWidget(reset_colors, len(COLOR_KEYS), 1)
+        self.preview = BoardWidget(animation_ms=0, pieces=PieceCache())
+        self.preview.setFixedSize(176, 176)
+        self.preview.set_interactive(False)
+        self.preview.show_coordinates = False
+        preview_fen = "rnbq1rk1/ppp2ppp/8/8/8/8/PPP2PPP/RNBQ1RK1 w - - 0 1"
+        self.preview.set_position(chess.Board(preview_fen))
+        board_row = QHBoxLayout()
+        board_row.addLayout(colors)
+        board_row.addSpacing(16)
+        board_row.addWidget(self.preview, alignment=Qt.AlignmentFlag.AlignTop)
+        board_row.addStretch()
         board = QGroupBox("Board")
         board_form = QFormLayout(board)
         board_form.addRow("Move animation (ms)", self.animation_spin)
         board_form.addRow("", self.coordinates_box)
-        board_form.addRow("", self.sounds_box)
+        board_form.addRow("Colours", board_row)
+
+        # sounds
+        self.mute_box = QCheckBox("Mute all sounds")
+        self.mute_box.toggled.connect(self._save)
+        self.sliders: dict[str, QSlider] = {}
+        self.slider_values: dict[str, QLabel] = {}
+        sound_grid = QGridLayout()
+        sound_grid.addWidget(self.mute_box, 0, 0, 1, 4)
+        for row, (name, label) in enumerate(SOUND_LABELS.items(), start=1):
+            slider = QSlider(Qt.Orientation.Horizontal)
+            slider.setRange(0, 100)
+            slider.setMinimumWidth(180)
+            slider.valueChanged.connect(self._save)
+            value = QLabel("100")
+            value.setFixedWidth(32)
+            play = QPushButton("Play")
+            play.setFixedWidth(60)
+            play.clicked.connect(lambda _checked=False, n=name: self._preview_sound(n))
+            self.sliders[name] = slider
+            self.slider_values[name] = value
+            sound_grid.addWidget(QLabel(label), row, 0)
+            sound_grid.addWidget(slider, row, 1)
+            sound_grid.addWidget(value, row, 2)
+            sound_grid.addWidget(play, row, 3)
+        sound_group = QGroupBox("Sounds")
+        sound_group.setLayout(sound_grid)
+
+        # text
+        self.text_spin = QSpinBox()
+        self.text_spin.setRange(0, 24)
+        self.text_spin.setSpecialValueText("default")
+        self.text_spin.valueChanged.connect(self._save)
+        text_group = QGroupBox("Text")
+        text_form = QFormLayout(text_group)
+        text_form.addRow("Text size (points, 0 = default)", self.text_spin)
 
         # engine
         self.engine_edit = QLineEdit()
@@ -92,6 +180,25 @@ class SettingsPage(QWidget):
         engine_form = QVBoxLayout(engine)
         engine_form.addLayout(engine_row)
         engine_form.addWidget(self.engine_status)
+
+        # data
+        self.clear_player_box = QComboBox()
+        self.clear_button = QPushButton("Clear stats...")
+        self.clear_button.clicked.connect(self._clear_stats)
+        clear_row = QHBoxLayout()
+        clear_row.addWidget(self.clear_player_box)
+        clear_row.addWidget(self.clear_button)
+        clear_row.addStretch()
+        clear_hint = QLabel(
+            "Deletes every run of the chosen player: leaderboard, history, stats, mistakes and "
+            "the played list. Players and settings stay."
+        )
+        clear_hint.setObjectName("muted")
+        clear_hint.setWordWrap(True)
+        data = QGroupBox("Data")
+        data_form = QVBoxLayout(data)
+        data_form.addLayout(clear_row)
+        data_form.addWidget(clear_hint)
 
         # database
         self.db_label = QLabel()
@@ -120,20 +227,17 @@ class SettingsPage(QWidget):
 
         reset = QPushButton("Reset to defaults")
         reset.clicked.connect(self._reset)
-        home = QPushButton("Home")
-        home.clicked.connect(self.home_requested.emit)
+        self.back_button = QPushButton("Home")
+        self.back_button.clicked.connect(self.home_requested.emit)
         bottom = QHBoxLayout()
         bottom.addWidget(reset)
         bottom.addStretch()
-        bottom.addWidget(home)
+        bottom.addWidget(self.back_button)
 
         content = QWidget()
         column = QVBoxLayout(content)
-        column.addWidget(title)
-        column.addWidget(difficulty)
-        column.addWidget(board)
-        column.addWidget(engine)
-        column.addWidget(database)
+        for group in (title, difficulty, board, sound_group, text_group, engine, data, database):
+            column.addWidget(group)
         column.addStretch()
         column.addLayout(bottom)
         scroll = QScrollArea()
@@ -154,6 +258,9 @@ class SettingsPage(QWidget):
 
     # -- load / save ---------------------------------------------------------------------------
 
+    def set_back_label(self, text: str) -> None:
+        self.back_button.setText(text)
+
     def refresh(self) -> None:
         self._loading = True
         self.start_spin.setValue(self.ctx.int_setting("start_rating", DEFAULTS["start_rating"]))
@@ -161,10 +268,23 @@ class SettingsPage(QWidget):
         self.window_spin.setValue(self.ctx.int_setting("window", DEFAULTS["window"]))
         self.animation_spin.setValue(self.ctx.int_setting("animation_ms", DEFAULTS["animation_ms"]))
         self.coordinates_box.setChecked(self.ctx.setting("coordinates", "1") == "1")
-        self.sounds_box.setChecked(self.ctx.setting("sounds", "1") == "1")
+        self.mute_box.setChecked(self.ctx.setting("sounds", "1") != "1")
+        for name, slider in self.sliders.items():
+            volume = self.ctx.int_setting(f"vol_{name}", 100)
+            slider.setValue(volume)
+            self.slider_values[name].setText(str(volume))
+        self.text_spin.setValue(self.ctx.int_setting("text_size", DEFAULTS["text_size"]))
         self.engine_edit.setText(self.ctx.setting("engine_path", ""))
         self.per_type_spin.setValue(self.ctx.int_setting("per_type", DEFAULTS["per_type"]))
+        current = self.clear_player_box.currentText()
+        self.clear_player_box.clear()
+        self.clear_player_box.addItem(ALL_PLAYERS)
+        for player in self.ctx.users.players():
+            self.clear_player_box.addItem(player.name)
+        if current:
+            self.clear_player_box.setCurrentText(current)
         self._loading = False
+        self._show_colors()
         self._describe_database()
         self._preview_ramp()
 
@@ -176,7 +296,11 @@ class SettingsPage(QWidget):
         self.ctx.set_setting("window", str(self.window_spin.value()))
         self.ctx.set_setting("animation_ms", str(self.animation_spin.value()))
         self.ctx.set_setting("coordinates", "1" if self.coordinates_box.isChecked() else "0")
-        self.ctx.set_setting("sounds", "1" if self.sounds_box.isChecked() else "0")
+        self.ctx.set_setting("sounds", "0" if self.mute_box.isChecked() else "1")
+        for name, slider in self.sliders.items():
+            self.ctx.set_setting(f"vol_{name}", str(slider.value()))
+            self.slider_values[name].setText(str(slider.value()))
+        self.ctx.set_setting("text_size", str(self.text_spin.value()))
         self.ctx.set_setting("engine_path", self.engine_edit.text().strip())
         self.ctx.set_setting("per_type", str(self.per_type_spin.value()))
         self._preview_ramp()
@@ -187,6 +311,10 @@ class SettingsPage(QWidget):
             self.ctx.set_setting(key, str(value))
         self.ctx.set_setting("coordinates", "1")
         self.ctx.set_setting("sounds", "1")
+        for name in SOUND_LABELS:
+            self.ctx.set_setting(f"vol_{name}", "100")
+        for key, (_label, default) in COLOR_KEYS.items():
+            self.ctx.set_setting(key, default)
         self.refresh()
         self.changed.emit()
 
@@ -194,6 +322,72 @@ class SettingsPage(QWidget):
         ramp = self.ctx.ramp()
         targets = ", ".join(str(ramp.target(i)) for i in (0, 5, 10, 20, 30))
         self.ramp_preview.setText(f"Targets after 0, 5, 10, 20, 30 solved: {targets}")
+
+    # -- colours -------------------------------------------------------------------------------
+
+    def _show_colors(self) -> None:
+        for key, button in self.color_buttons.items():
+            value = color_setting(self.ctx, key)
+            text_color = "#000000" if QColor(value).lightness() > 128 else "#ffffff"
+            button.setText(value)
+            button.setStyleSheet(
+                f"background-color: {value}; color: {text_color}; border: 1px solid #5f6368;"
+            )
+        self.preview.set_colors(
+            color_setting(self.ctx, "board_light"), color_setting(self.ctx, "board_dark")
+        )
+        self.preview.pieces.set_piece_colors(
+            color_setting(self.ctx, "piece_white"), color_setting(self.ctx, "piece_black")
+        )
+        self.preview.update()
+
+    def set_color(self, key: str, value: str) -> None:
+        """Store a colour and apply it (used by the colour dialog and by tests)."""
+        default = COLOR_KEYS[key][1]
+        self.ctx.set_setting(key, normalize_color(value, default))
+        self._show_colors()
+        self.changed.emit()
+
+    def _pick_color(self, key: str) -> None:
+        current = QColor(color_setting(self.ctx, key))
+        chosen = QColorDialog.getColor(current, self, COLOR_KEYS[key][0])
+        if chosen.isValid():
+            self.set_color(key, chosen.name())
+
+    def _reset_colors(self) -> None:
+        for key, (_label, default) in COLOR_KEYS.items():
+            self.ctx.set_setting(key, default)
+        self._show_colors()
+        self.changed.emit()
+
+    # -- sounds, data --------------------------------------------------------------------------
+
+    def _preview_sound(self, name: str) -> None:
+        sounds.player.set_volume(name, self.sliders[name].value())
+        was_enabled = sounds.player.enabled
+        sounds.player.enabled = True  # preview even while muted
+        sounds.player.play(name)
+        sounds.player.enabled = was_enabled
+
+    def _clear_stats(self) -> None:
+        name = self.clear_player_box.currentText()
+        player_id = None
+        if name != ALL_PLAYERS:
+            player_id = next((p.id for p in self.ctx.users.players() if p.name == name), None)
+            if player_id is None:
+                return
+        who = "everyone" if player_id is None else name
+        answer = QMessageBox.question(
+            self,
+            "Clear stats",
+            f"Delete every run and all stats for {who}? This cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        removed = self.ctx.users.clear_runs(player_id)
+        self.progress_label.setText(f"Removed {removed} runs for {who}.")
+        self.data_cleared.emit()
 
     def _browse_engine(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Choose the Stockfish executable")

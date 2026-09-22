@@ -151,7 +151,8 @@ class ReviewPage(QWidget):
             record = puzzle.record
             mark = "✓" if record.solved else "✗"
             types = ", ".join(sorted(record.types)) or "-"
-            item = QListWidgetItem(f"{mark}  #{record.seq}   {record.rating}   {types}")
+            seconds = f"{record.solve_ms / 1000:.1f}s"
+            item = QListWidgetItem(f"{mark}  #{record.seq}   {record.rating}   {seconds}   {types}")
             if not record.solved:
                 item.setForeground(WRONG_COLOR)
             self.puzzle_list.addItem(item)

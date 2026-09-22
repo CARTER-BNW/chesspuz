@@ -8,6 +8,7 @@ the page or starting the next puzzle bumps the generation, so stale timers never
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 
 import chess
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QListWidget,
+    QListWidgetItem,
     QMessageBox,
     QPushButton,
     QVBoxLayout,
@@ -28,6 +30,7 @@ from PySide6.QtWidgets import (
 from chesspuz import sounds
 from chesspuz.run import NoPuzzles, SurvivalRun
 from chesspuz.session import Outcome, PuzzleSession
+from chesspuz.ui import theme
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.board import BoardWidget
 from chesspuz.userdb import Player
@@ -38,11 +41,18 @@ PLAYBACK_STEP_MS = 450
 NEXT_PUZZLE_MS = 1100
 
 
+def format_elapsed(seconds: float) -> str:
+    minutes, rest = divmod(max(0.0, seconds), 60)
+    return f"{int(minutes)}:{rest:04.1f}"
+
+
 class RunPage(QWidget):
     home_requested = Signal()
     play_again_requested = Signal(str, object)  # player name, types
     review_requested = Signal(int)  # run id
     mistakes_requested = Signal()
+    settings_requested = Signal()
+    puzzle_requested = Signal(object)  # Puzzle from the overview list
     run_ended = Signal(int)  # run id
 
     def __init__(
@@ -62,6 +72,8 @@ class RunPage(QWidget):
         self.session: PuzzleSession | None = None
         self.total_puzzles: int | None = None  # practice queue length
         self.puzzle_number = 0  # 1-based, fixed when the puzzle starts
+        self.record_streak = 0  # all-time best streak of this player
+        self._started: float | None = None
         self._generation = 0
         self._phase = "idle"  # idle | opponent | solving | reply | playback | done | over
         self._playback: list[chess.Move] = []
@@ -80,6 +92,8 @@ class RunPage(QWidget):
         self.streak_label.setObjectName("muted")
         self.puzzle_label = QLabel()
         self.puzzle_label.setObjectName("big")
+        self.time_label = QLabel("0:00.0")
+        self.time_label.setToolTip("Time on this puzzle (information only)")
         self.turn_label = QLabel()
         self.banner = QLabel()
         self.banner.setWordWrap(True)
@@ -90,6 +104,13 @@ class RunPage(QWidget):
         self.info_label.setWordWrap(True)
         self.results = QListWidget()
         self.results.setMaximumHeight(140)
+        self.results.setToolTip("Double-click a puzzle to play it again in its own window")
+        self.results.itemDoubleClicked.connect(self._open_result)
+        self.settings_button = QPushButton("Settings")
+        self.settings_button.clicked.connect(self.settings_requested.emit)
+        self._ticker = QTimer(self)
+        self._ticker.setInterval(100)
+        self._ticker.timeout.connect(self._tick)
 
         self.solution_button = QPushButton("Show solution")
         self.solution_button.clicked.connect(self._show_solution)
@@ -114,7 +135,11 @@ class RunPage(QWidget):
         side.addLayout(score_row)
         side.addWidget(self.streak_label)
         side.addSpacing(8)
-        side.addWidget(self.puzzle_label)
+        puzzle_row = QHBoxLayout()
+        puzzle_row.addWidget(self.puzzle_label)
+        puzzle_row.addStretch()
+        puzzle_row.addWidget(self.time_label)
+        side.addLayout(puzzle_row)
         side.addWidget(self.turn_label)
         side.addWidget(self.banner)
         side.addWidget(self.info_label)
@@ -128,8 +153,10 @@ class RunPage(QWidget):
         side.addStretch()
         buttons = QHBoxLayout()
         buttons.addWidget(self.clear_button)
+        buttons.addWidget(self.settings_button)
         buttons.addWidget(self.end_button)
         side.addLayout(buttons)
+        self.refresh_styles()
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -153,6 +180,7 @@ class RunPage(QWidget):
         self.info_label.clear()
         self.board.clear_annotations()
         self.end_button.setText("End practice" if run.practice else "End run")
+        self.record_streak = self.ctx.users.best_streak(player.id)
         self._update_panel()
         self._next_puzzle()
 
@@ -163,6 +191,7 @@ class RunPage(QWidget):
             self.run.quit()
             self.ctx.users.finish_run(self.run_id, self.run)
         self._phase = "over"
+        self._ticker.stop()
         self.board.set_interactive(False)
         self._update_actions()
 
@@ -201,6 +230,9 @@ class RunPage(QWidget):
         self.board.set_position(puzzle.initial_board())
         self.board.clear_annotations()
         self._phase = "opponent"
+        self._started = None
+        self._ticker.stop()
+        self.time_label.setText("0:00.0")
         self._set_banner("Watch the opponent's move...", "muted")
         self.info_label.clear()
         self._update_panel()
@@ -219,6 +251,8 @@ class RunPage(QWidget):
         self._phase = "solving"
         self.board.set_interactive(True)
         self.run.mark_started()
+        self._started = time.monotonic()
+        self._ticker.start()
         side = "White" if self.session.solver == chess.WHITE else "Black"
         self._set_banner(f"{side} to move. Find the best move!", "normal")
         self._update_actions()
@@ -241,6 +275,7 @@ class RunPage(QWidget):
             self.board.play_move(move, animate=False)
             self.board.set_interactive(False)
             self._phase = "done"
+            self._ticker.stop()
             sounds.player.play("correct")
             if was_failed:
                 self._set_banner("Solved, after a mistake. No point this time.", "muted")
@@ -273,6 +308,7 @@ class RunPage(QWidget):
         session = self.session
         was_failed = session.failed
         moves = self.run.reveal_solution()
+        self._ticker.stop()
         if not was_failed:
             self._show_result()
         self.board.set_interactive(False)
@@ -303,14 +339,32 @@ class RunPage(QWidget):
             self._playback = []
             self._next_puzzle()
 
+    def _tick(self) -> None:
+        if self._started is not None and self._phase in ("solving", "reply"):
+            self.time_label.setText(format_elapsed(time.monotonic() - self._started))
+
     def _show_result(self) -> None:
         assert self.run is not None and self.session is not None
         result = self.run.results[-1]
         puzzle = result.puzzle
         types = ", ".join(sorted(puzzle.types)) or "-"
         mark = "✓" if result.solved else "✗"
+        seconds = f"{result.solve_ms / 1000:.1f}s"
         self.info_label.setText(f"Puzzle rating {puzzle.rating}  ·  {types}")
-        self.results.insertItem(0, f"{mark}  #{result.seq}  {puzzle.rating}  {types}")
+        item = QListWidgetItem(f"{mark}  #{result.seq}  {puzzle.rating}  {seconds}  {types}")
+        item.setData(Qt.ItemDataRole.UserRole, len(self.run.results) - 1)
+        self.results.insertItem(0, item)
+
+    def _open_result(self, item: QListWidgetItem) -> None:
+        index = item.data(Qt.ItemDataRole.UserRole)
+        if self.run is not None and index is not None and 0 <= int(index) < len(self.run.results):
+            self.puzzle_requested.emit(self.run.results[int(index)].puzzle)
+
+    def refresh_styles(self) -> None:
+        """Re-apply the inline pixel sizes after a text-size change."""
+        self.lives_label.setStyleSheet(f"font-size: {theme.px(28)}px; color: #e57373;")
+        self.score_label.setStyleSheet(f"font-size: {theme.px(40)}px; font-weight: bold;")
+        self.time_label.setStyleSheet(f"font-size: {theme.px(18)}px; color: #9aa0a6;")
 
     def _update_panel(self) -> None:
         if self.run is None:
@@ -329,7 +383,10 @@ class RunPage(QWidget):
             self.puzzle_label.setText(f"Puzzle {self.puzzle_number}")
             self.turn_label.setText(f"target rating ~{run.target_rating}")
         self.score_label.setText(str(run.score))
-        self.streak_label.setText(f"streak {run.streak}  ·  best streak {run.best_streak}")
+        record = max(self.record_streak, run.best_streak)
+        self.streak_label.setText(
+            f"streak {run.streak}  ·  best this run {run.best_streak}  ·  record {record}"
+        )
 
     def _update_actions(self) -> None:
         run, session = self.run, self.session
@@ -341,7 +398,8 @@ class RunPage(QWidget):
     def _set_banner(self, text: str, tone: str) -> None:
         colors = {"good": "#81c784", "bad": "#e57373", "muted": "#9aa0a6", "normal": "#e8eaed"}
         self.banner.setText(text)
-        self.banner.setStyleSheet(f"font-size: 16px; font-weight: bold; color: {colors[tone]};")
+        size = theme.px(16)
+        self.banner.setStyleSheet(f"font-size: {size}px; font-weight: bold; color: {colors[tone]};")
 
     # -- ending --------------------------------------------------------------------------------
 
@@ -364,16 +422,18 @@ class RunPage(QWidget):
     def _game_over(self) -> None:
         assert self.run is not None and self.run_id is not None and self.player is not None
         self._phase = "over"
+        self._ticker.stop()
         self.board.set_interactive(False)
         if self.run.ended_by is None:
             self.run.quit()
         self.ctx.users.finish_run(self.run_id, self.run)
         best = self.ctx.users.best_score(self.player.id, self.run.types)
+        self.record_streak = max(self.record_streak, self.run.best_streak)
         self._update_panel()
         self._update_actions()
         self._set_banner("Practice over" if self.run.practice else "Run over", "muted")
         self.run_ended.emit(self.run_id)
-        dialog = GameOverDialog(self, self.run, best)
+        dialog = GameOverDialog(self, self.run, best, self.record_streak)
         choice = dialog.exec()
         if choice == GameOverDialog.PLAY_AGAIN:
             self.play_again_requested.emit(self.player.name, list(self.run.types))
@@ -391,7 +451,9 @@ class GameOverDialog(QDialog):
     PLAY_AGAIN = 2
     HOME = 1
 
-    def __init__(self, parent: QWidget, run: SurvivalRun, best: int) -> None:
+    def __init__(
+        self, parent: QWidget, run: SurvivalRun, best: int, record_streak: int = 0
+    ) -> None:
         super().__init__(parent)
         self.setModal(True)
         if run.practice:
@@ -406,7 +468,8 @@ class GameOverDialog(QDialog):
             details = QLabel(
                 f"Best with these types: {best}\n"
                 f"Highest rating solved: {run.max_rating_solved or '-'}\n"
-                f"Best streak: {run.best_streak}"
+                f"Best streak: {run.best_streak} "
+                f"(your record: {max(record_streak, run.best_streak)})"
             )
         headline.setObjectName("title")
         score.setStyleSheet("font-size: 32px; font-weight: bold;")

@@ -1,4 +1,4 @@
-"""Mistakes page: every puzzle failed in Survival, and buttons to practise them."""
+"""Played page: every puzzle attempt of a player; double-click plays it again in a window."""
 
 from __future__ import annotations
 
@@ -18,25 +18,21 @@ from PySide6.QtWidgets import (
 
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.leaderboard_page import WRONG_ROLE_COLOR
-from chesspuz.userdb import Mistake
+from chesspuz.userdb import PlayedRecord
 
 
-class MistakesPage(QWidget):
+class PlayedPage(QWidget):
     home_requested = Signal()
-    practice_requested = Signal(str, object)  # player name, list of Puzzle
     puzzle_requested = Signal(object)  # Puzzle
 
     def __init__(self, ctx: AppContext, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.ctx = ctx
-        self.mistakes: list[Mistake] = []
+        self.records: list[PlayedRecord] = []
 
-        title = QLabel("Mistakes")
+        title = QLabel("Played puzzles")
         title.setObjectName("title")
-        subtitle = QLabel(
-            "Puzzles you got wrong in Survival. Practise them until they stick; "
-            "double-click one to play it now."
-        )
+        subtitle = QLabel("Every attempt, newest first. Double-click a puzzle to play it again.")
         subtitle.setObjectName("muted")
         self.player_box = QComboBox()
         self.player_box.currentIndexChanged.connect(self._fill)
@@ -46,28 +42,19 @@ class MistakesPage(QWidget):
         filters.addStretch()
 
         self.table = QTableWidget(0, 6)
-        self.table.setHorizontalHeaderLabels(
-            ["Last failed", "Rating", "Types", "Times failed", "Last practice", "Status"]
-        )
+        self.table.setHorizontalHeaderLabels(["When", "Result", "Rating", "Types", "Time", "Mode"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.verticalHeader().setVisible(False)
         header = self.table.horizontalHeader()
         header.setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
         self.table.setAlternatingRowColors(True)
         self.table.itemDoubleClicked.connect(self._open)
 
-        self.wrong_button = QPushButton()
-        self.wrong_button.setObjectName("primary")
-        self.wrong_button.clicked.connect(lambda: self._practice(only_wrong=True))
-        self.all_button = QPushButton()
-        self.all_button.clicked.connect(lambda: self._practice(only_wrong=False))
         home = QPushButton("Home")
         home.clicked.connect(self.home_requested.emit)
         bottom = QHBoxLayout()
-        bottom.addWidget(self.wrong_button)
-        bottom.addWidget(self.all_button)
         bottom.addStretch()
         bottom.addWidget(home)
 
@@ -99,41 +86,29 @@ class MistakesPage(QWidget):
 
     def _fill(self, *_args: object) -> None:
         player_id = self._player_id()
-        self.mistakes = self.ctx.users.mistakes(player_id) if player_id is not None else []
-        self.table.setRowCount(len(self.mistakes))
-        for row, mistake in enumerate(self.mistakes):
-            practice = mistake.last_practice or "never"
-            status = "still wrong" if mistake.still_wrong else "fixed"
+        self.records = self.ctx.users.played_puzzles(player_id) if player_id is not None else []
+        self.table.setRowCount(len(self.records))
+        for row, played in enumerate(self.records):
+            record = played.record
             cells = (
-                mistake.last_failed_at.replace("T", " ")[:16],
-                str(mistake.puzzle.rating),
-                ", ".join(sorted(mistake.puzzle.types)),
-                str(mistake.times_failed),
-                practice,
-                status,
+                played.played_at.replace("T", " ")[:16],
+                "solved" if record.solved else "failed",
+                str(record.rating),
+                ", ".join(sorted(record.types)),
+                f"{record.solve_ms / 1000:.1f}s",
+                played.mode,
             )
             for column, text in enumerate(cells):
                 item = QTableWidgetItem(text)
-                if column in (1, 3):
+                if column in (2, 4):
                     item.setTextAlignment(
                         Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
                     )
-                if column == 5 and mistake.still_wrong:
+                if column == 1 and not record.solved:
                     item.setForeground(WRONG_ROLE_COLOR)
                 self.table.setItem(row, column, item)
-        wrong = sum(1 for m in self.mistakes if m.still_wrong)
-        self.wrong_button.setText(f"Practise still wrong ({wrong})")
-        self.wrong_button.setEnabled(wrong > 0)
-        self.all_button.setText(f"Practise all ({len(self.mistakes)})")
-        self.all_button.setEnabled(bool(self.mistakes))
 
     def _open(self, item: QTableWidgetItem) -> None:
         row = item.row()
-        if 0 <= row < len(self.mistakes):
-            self.puzzle_requested.emit(self.mistakes[row].puzzle)
-
-    def _practice(self, *, only_wrong: bool) -> None:
-        chosen = [m.puzzle for m in self.mistakes if not only_wrong or m.still_wrong]
-        name = self.player_box.currentText()
-        if chosen and name:
-            self.practice_requested.emit(name, chosen)
+        if 0 <= row < len(self.records):
+            self.puzzle_requested.emit(self.records[row].puzzle)

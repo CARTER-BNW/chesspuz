@@ -20,6 +20,8 @@ from chesspuz import paths, sounds, themes
 from chesspuz.puzzle import Puzzle
 from chesspuz.puzzledb import PuzzleRepository
 from chesspuz.run import RampSettings
+from chesspuz.ui import theme
+from chesspuz.ui.pieces import shared_pieces
 from chesspuz.userdb import UserDB
 
 APP_NAME = "chesspuz"
@@ -103,6 +105,7 @@ class MainWindow(QMainWindow):
         from chesspuz.ui.home_page import HomePage
         from chesspuz.ui.leaderboard_page import LeaderboardPage
         from chesspuz.ui.mistakes_page import MistakesPage
+        from chesspuz.ui.played_page import PlayedPage
         from chesspuz.ui.review_page import ReviewPage
         from chesspuz.ui.run_page import RunPage
         from chesspuz.ui.settings_page import SettingsPage
@@ -115,6 +118,9 @@ class MainWindow(QMainWindow):
         self.stats = StatsPage(ctx)
         self.settings = SettingsPage(ctx)
         self.mistakes = MistakesPage(ctx)
+        self.played = PlayedPage(ctx)
+        self.windows: list = []  # open PuzzleWindows
+        self._settings_return: object = None
         self.pages = (
             self.home,
             self.run_page,
@@ -123,6 +129,7 @@ class MainWindow(QMainWindow):
             self.stats,
             self.settings,
             self.mistakes,
+            self.played,
         )
         for page in self.pages:
             self.stack.addWidget(page)
@@ -142,10 +149,17 @@ class MainWindow(QMainWindow):
         self.mistakes.home_requested.connect(self.show_home)
         self.mistakes.practice_requested.connect(self.start_practice)
         self.run_page.mistakes_requested.connect(self.show_mistakes)
+        self.run_page.settings_requested.connect(lambda: self.show_settings(self.run_page))
+        self.run_page.puzzle_requested.connect(self.open_puzzle_window)
+        self.mistakes.puzzle_requested.connect(self.open_puzzle_window)
+        self.home.played_requested.connect(self.show_played)
+        self.played.home_requested.connect(self.show_home)
+        self.played.puzzle_requested.connect(self.open_puzzle_window)
+        self.settings.data_cleared.connect(self.home.refresh)
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
-        self.settings.home_requested.connect(self.show_home)
+        self.settings.home_requested.connect(self.leave_settings)
         self.settings.changed.connect(self.apply_settings)
         self.settings.database_changed.connect(self.home.refresh)
         self.apply_settings()
@@ -153,15 +167,63 @@ class MainWindow(QMainWindow):
         self.show_home()
 
     def apply_settings(self) -> None:
-        """Push live-changeable settings into the pages."""
+        """Push live-changeable settings into the pages and open puzzle windows."""
+        from chesspuz.ui.settings_page import color_setting
+
+        app = QApplication.instance()
+        if app is not None:
+            theme.apply_text_size(app, self.ctx.int_setting("text_size", 0))
         animation = self.ctx.animation_ms()
         coordinates = self.ctx.setting("coordinates", "1") == "1"
-        for board in (self.run_page.board, self.review.board):
+        light = color_setting(self.ctx, "board_light")
+        dark = color_setting(self.ctx, "board_dark")
+        shared_pieces.set_piece_colors(
+            color_setting(self.ctx, "piece_white"), color_setting(self.ctx, "piece_black")
+        )
+        boards = [self.run_page.board, self.review.board, *(w.board for w in self.windows)]
+        for board in boards:
             board.animation_ms = animation
             board.show_coordinates = coordinates
-            board.update()
+            board.set_colors(light, dark)
+        for widget in (self.run_page, *self.windows):
+            widget.refresh_styles()
         self.review.set_engine(self.ctx.setting("engine_path", ""))
         sounds.player.enabled = self.ctx.setting("sounds", "1") == "1"
+        for name in sounds.NAMES:
+            sounds.player.set_volume(name, self.ctx.int_setting(f"vol_{name}", 100))
+
+    def show_played(self) -> None:
+        self.played.refresh()
+        self.stack.setCurrentWidget(self.played)
+
+    def leave_settings(self) -> None:
+        target = self._settings_return
+        self._settings_return = None
+        if target is self.run_page and self.run_page.is_running():
+            self.stack.setCurrentWidget(self.run_page)
+        else:
+            self.show_home()
+
+    def current_player(self):
+        name = self.home.player_name() or self.ctx.last_player() or "Player"
+        return self.ctx.users.get_or_create_player(name)
+
+    def open_puzzle_window(self, puzzle: Puzzle) -> None:
+        from chesspuz.ui.puzzle_window import PuzzleWindow
+
+        window = PuzzleWindow(
+            self.ctx, self.current_player(), puzzle, animation_ms=self.ctx.animation_ms()
+        )
+        window.closed.connect(self._window_closed)
+        self.windows.append(window)
+        self.apply_settings()
+        window.show()
+
+    def _window_closed(self, window) -> None:
+        if window in self.windows:
+            self.windows.remove(window)
+        if self.ctx.users.conn is not None:
+            self.home.refresh()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 (Qt override)
         if event.type() == QEvent.Type.MouseButtonPress and isinstance(watched, QAbstractButton):
@@ -188,7 +250,9 @@ class MainWindow(QMainWindow):
             except ValueError:
                 pass
 
-    def show_settings(self) -> None:
+    def show_settings(self, return_to: object = None) -> None:
+        self._settings_return = return_to
+        self.settings.set_back_label("Back to run" if return_to is self.run_page else "Home")
         self.settings.refresh()
         self.stack.setCurrentWidget(self.settings)
 
@@ -237,7 +301,10 @@ class MainWindow(QMainWindow):
                 return
             self.run_page.abort()
         self.review.stop_engine()
-        self.ctx.set_setting("geometry", bytes(self.saveGeometry().data()).hex())
+        for window in list(self.windows):
+            window.close()
+        if self.ctx.users.conn is not None:  # closing twice, after the context is gone, is fine
+            self.ctx.set_setting("geometry", bytes(self.saveGeometry().data()).hex())
         event.accept()
 
 
