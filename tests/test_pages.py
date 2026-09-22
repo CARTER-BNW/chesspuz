@@ -83,6 +83,22 @@ def test_a_whole_run_plays_through_the_run_page(ctx: AppContext, qtbot, monkeypa
     assert "3" not in page.lives_label.text() and page.score_label.text() == "2"
 
 
+def test_run_page_board_stays_in_step_through_an_animated_reply(ctx: AppContext, qtbot) -> None:
+    page = RunPage(ctx, animation_ms=40, tempo=0)
+    qtbot.addWidget(page)
+    player = ctx.users.get_or_create_player("Alice")
+    run_id, run = ctx.users.new_run(player.id, ["Queen Sacrifice"], ctx.puzzles.pick)
+    page.start(run_id, run, player)
+    qtbot.waitUntil(lambda: page.board.interactive, timeout=2000)
+    assert page.session.puzzle.id == "smothered"
+    page.board.move_played.emit(chess.Move.from_uci("c4g8"))
+    assert not page.board.interactive  # waiting for the animated reply
+    qtbot.waitUntil(lambda: page.board.interactive, timeout=2000)
+    assert page.board.board.fen() == page.session.board.fen()
+    assert page.board.board.piece_at(chess.G8) == chess.Piece(chess.ROOK, chess.BLACK)
+    page.abort()
+
+
 def test_main_window_starts_a_run_and_abort_marks_it_quit(ctx: AppContext, qtbot) -> None:
     window = MainWindow(ctx)
     qtbot.addWidget(window)

@@ -135,9 +135,10 @@ class BoardWidget(QWidget):
         return self._interactive
 
     def set_interactive(self, on: bool) -> None:
+        """Allow or block moves. A running animation keeps going and lands normally."""
         self._interactive = on
-        self._cancel_animation()
-        self._reset_input()
+        if self.state is not InputState.ANIMATING:
+            self._reset_input()
         self.update()
 
     def set_position(self, board: chess.Board, last_move: chess.Move | None = None) -> None:

@@ -131,6 +131,19 @@ def test_animation_is_cancelled_by_a_new_position(qtbot) -> None:
     assert widget.state is InputState.IDLE
 
 
+def test_toggling_interactive_does_not_cancel_an_animation(qtbot) -> None:
+    widget = BoardWidget(animation_ms=150)
+    qtbot.addWidget(widget)
+    widget.resize(400, 400)
+    widget.set_interactive(False)
+    widget.play_move(chess.Move.from_uci("e2e4"))
+    widget.set_interactive(True)  # what the Run page does right after starting a reply
+    assert widget.state is InputState.ANIMATING
+    qtbot.waitUntil(lambda: widget.state is not InputState.ANIMATING, timeout=2000)
+    assert widget.board.piece_at(chess.E4) == chess.Piece(chess.PAWN, chess.WHITE)
+    assert widget.state is InputState.IDLE and widget.interactive
+
+
 def test_promotion_chooser_picks_the_piece(board: BoardWidget, qtbot) -> None:
     board.set_position(chess.Board("8/4P2k/8/8/8/8/8/K7 w - - 0 1"))
     with qtbot.assertNotEmitted(board.move_played):
