@@ -11,7 +11,7 @@ First run: `python main.py import --download` (one-time, about 300 MB) builds th
 - Engine (optional): download Stockfish from https://stockfishchess.org, unzip it, and set the executable path in Settings to see the evaluation and best move while exploring in Review.
 
 ## Commands
-- Run: `python main.py`
+- Run: double-click `run.bat` (or `python main.py`; `run.bat --console` shows errors)
 - Test: `python -m pytest -q`
 - Lint + format: `ruff check . && ruff format .`
 - Install deps: `python -m pip install -r requirements.txt -r requirements-dev.txt`

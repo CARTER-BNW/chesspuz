@@ -3,7 +3,7 @@
 Dark-mode PySide6 chess puzzle trainer: chess.com-style Survival mode on the Lichess puzzle database. Spec: docs/specs/survival-trainer.md
 
 ## Commands
-- Run: `python main.py` (GUI); `python main.py import --download` builds the puzzle DB once; `python main.py stats` prints puzzle counts
+- Run: `run.bat` or `python main.py` (GUI); `python main.py import --download` builds the puzzle DB once; `python main.py stats` prints puzzle counts
 - Test: `python -m pytest -q`
 - Lint + format: `ruff check . && ruff format .`
 - Install deps: `python -m pip install -r requirements.txt -r requirements-dev.txt`
