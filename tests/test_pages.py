@@ -7,6 +7,7 @@ import pytest
 
 from chesspuz.importer import import_puzzles
 from chesspuz.ui.app import AppContext, MainWindow
+from chesspuz.ui.board import InputState
 from chesspuz.ui.home_page import HomePage
 from chesspuz.ui.run_page import GameOverDialog, RunPage
 from chesspuz.userdb import FINISHED, QUIT
@@ -89,11 +90,11 @@ def test_run_page_board_stays_in_step_through_an_animated_reply(ctx: AppContext,
     player = ctx.users.get_or_create_player("Alice")
     run_id, run = ctx.users.new_run(player.id, ["Queen Sacrifice"], ctx.puzzles.pick)
     page.start(run_id, run, player)
-    qtbot.waitUntil(lambda: page.board.interactive, timeout=2000)
+    qtbot.waitUntil(lambda: page.board.state is InputState.IDLE, timeout=2000)
     assert page.session.puzzle.id == "smothered"
     page.board.move_played.emit(chess.Move.from_uci("c4g8"))
-    assert not page.board.interactive  # waiting for the animated reply
-    qtbot.waitUntil(lambda: page.board.interactive, timeout=2000)
+    assert page.board.state is not InputState.IDLE  # the reply is about to animate
+    qtbot.waitUntil(lambda: page.board.state is InputState.IDLE, timeout=2000)
     assert page.board.board.fen() == page.session.board.fen()
     assert page.board.board.piece_at(chess.G8) == chess.Piece(chess.ROOK, chess.BLACK)
     page.abort()
