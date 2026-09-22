@@ -72,6 +72,15 @@ Outcome: runs compare on leaderboards, per-type accuracy is visible, settings pe
 - [x] Optional: Stockfish path setting; Review explore shows eval + best-move arrow via chess.engine in a worker; works without an engine
 Done when: leaderboard filters by type set, settings change the next run, GUI import completes without restart, and (if configured) eval updates while exploring.
 
+## Phase 8 - Release
+Outcome: the app is public and installable without Python.
+- [x] LICENSE (GPL-3.0-or-later, matching python-chess) and pyproject metadata
+- [x] PyInstaller spec, `build_release.bat`, `tools/make_icon.py`, frozen-build hint on Home
+- [x] `dist/chesspuz-<version>-windows.zip` built and smoke-tested
+- [ ] Public GitHub repository pushed (needs `gh auth login`)
+- [ ] GitHub release v0.1.0 with the zip attached
+Done when: a fresh machine can download the zip from the Releases page, run chesspuz.exe and rebuild the database from Settings.
+
 ## Decisions
 - 2026-09-22: scaffolded with the python template - standard layout
 - 2026-09-22: GUI is PySide6 (Fusion + dark scheme) - modern dark theme, real tables, and the SVG pieces bundled with python-chess need no art assets
@@ -89,4 +98,5 @@ Done when: leaderboard filters by type set, settings change the next run, GUI im
 - 2026-09-23: piece colours recolour the SVG body tokens per side; outlines and light details stay - simple and reversible
 - 2026-09-23: a puzzle window records only its first attempt as a one-puzzle practice session; an untouched window leaves no run behind
 - 2026-09-23: best streak shows this run's best and an all-time record computed from run history (no schema change)
-
+- 2026-09-23: licence is GPL-3.0-or-later - python-chess is GPL-3, so a public repo must be GPL-compatible
+- 2026-09-23: releases are PyInstaller one-folder zips - no installer framework on this machine; Inno Setup can wrap the folder later

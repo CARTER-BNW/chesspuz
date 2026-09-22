@@ -1,7 +1,11 @@
 [project]
 name = "chesspuz"
 version = "0.1.0"
+description = "Dark-mode chess puzzle trainer with a chess.com-style Survival mode on the Lichess puzzle database"
+readme = "README.md"
 requires-python = ">=3.12"
+license = { text = "GPL-3.0-or-later" }
+dependencies = ["chess>=1.11", "PySide6-Essentials>=6.8", "zstandard>=0.23"]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

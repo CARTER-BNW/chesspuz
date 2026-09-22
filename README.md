@@ -15,6 +15,15 @@ First run: `python main.py import --download` (one-time, about 300 MB) builds th
 - Review: after a run (or from the Leaderboard and History) step through every puzzle, compare your moves with the solution, and play any move to explore; Back to the line returns.
 - Engine (optional): download Stockfish from https://stockfishchess.org, unzip it, and set the executable path in Settings to see the evaluation and best move while exploring in Review.
 
+## Install (Windows)
+- Download `chesspuz-<version>-windows.zip` from the Releases page, unzip it anywhere and run `chesspuz.exe`.
+- First start: open Settings and press "Rebuild puzzle database" (downloads the Lichess puzzle file, about 300 MB, once). Puzzles and your results live in `%LOCALAPPDATA%\chesspuz`.
+- Optional: download Stockfish from https://stockfishchess.org and set its path in Settings for engine analysis in Review.
+
+## Build a release yourself
+- `python -m pip install -r requirements.txt -r requirements-dev.txt pyinstaller`
+- `build_release.bat` builds `dist\chesspuz\chesspuz.exe` and `dist\chesspuz-<version>-windows.zip` (icon from `tools\make_icon.py`, spec in `chesspuz.spec`).
+
 ## Commands
 - Run: double-click `run.bat` (or `python main.py`; `run.bat --console` shows errors)
 - Test: `python -m pytest -q`
@@ -29,3 +38,6 @@ First run: `python main.py import --download` (one-time, about 300 MB) builds th
 - Instructions Claude reads every session: [CLAUDE.md](CLAUDE.md)
 
 Created 2026-09-22 from the `python` template in `D:\Dev\_templates`.
+
+## Licence
+GPL-3.0-or-later (see LICENSE). Puzzles come from the Lichess puzzle database (CC0); piece images are the Colin Burnett set bundled with python-chess (GPL/BSD/GFDL).

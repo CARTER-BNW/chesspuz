@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import sys
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -148,9 +150,11 @@ class HomePage(QWidget):
             box.setEnabled(available)
 
         if self.ctx.puzzles is None:
-            self.status_label.setText(
-                "No puzzle database yet. Build it once with:  python main.py import --download"
-            )
+            if getattr(sys, "frozen", False):
+                hint = "open Settings and press Rebuild puzzle database (downloads about 300 MB)"
+            else:
+                hint = "python main.py import --download, or Settings > Rebuild puzzle database"
+            self.status_label.setText(f"No puzzle database yet. Build it once: {hint}")
         else:
             self.status_label.setText(f"{self.ctx.puzzles.count():,} puzzles loaded")
         self._selection_changed()

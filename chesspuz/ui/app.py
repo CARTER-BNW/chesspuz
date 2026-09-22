@@ -98,7 +98,9 @@ class MainWindow(QMainWindow):
     def __init__(self, ctx: AppContext) -> None:
         super().__init__()
         self.ctx = ctx
-        self.setWindowTitle(APP_NAME)
+        from chesspuz import __version__
+
+        self.setWindowTitle(f"{APP_NAME} {__version__}")
         self.stack = QStackedWidget()
         self.setCentralWidget(self.stack)
 
