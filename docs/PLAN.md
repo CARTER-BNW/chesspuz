@@ -14,11 +14,11 @@ Done when: `python -c "import chess.svg, PySide6.QtSvg, zstandard"` works and `p
 
 ## Phase 1 - Pure game logic
 Outcome: puzzle rules, type mapping and the Survival run work headless with no data and no Qt.
-- [ ] `chesspuz/puzzle.py`: Puzzle dataclass (id, fen, moves, rating, themes, types, solver colour, board after the opponent's move)
-- [ ] `chesspuz/themes.py`: the 19 types, TYPE_MAP to Lichess themes, derived detectors (Opposition, Queen Sacrifice, Scholar's Mate), `types_for()`
-- [ ] `chesspuz/session.py`: PuzzleSession state machine (expected move, alternate mate accepted, promotion required, opponent reply, complete/failed, remaining solution)
-- [ ] `chesspuz/run.py`: DifficultyRamp with widening windows; SurvivalRun (3 lives, score, streak, seen set, pick callable, record callback, finished)
-- [ ] Tests: castling both UCI forms, promotion and under-promotion, en passant, mate at move 3 accepted, wrong move mid-line, ramp widening, three lives, detectors on hand-built FENs
+- [x] `chesspuz/puzzle.py`: Puzzle dataclass (id, fen, moves, rating, themes, types, solver colour, board after the opponent's move)
+- [x] `chesspuz/themes.py`: the 19 types, TYPE_MAP to Lichess themes, derived detectors (Opposition, Queen Sacrifice, Scholar's Mate), `types_for()`
+- [x] `chesspuz/session.py`: PuzzleSession state machine (expected move, alternate mate accepted, promotion required, opponent reply, complete/failed, remaining solution)
+- [x] `chesspuz/run.py`: DifficultyRamp with widening windows; SurvivalRun (3 lives, score, streak, seen set, pick callable, record callback, finished)
+- [x] Tests: castling both UCI forms, promotion and under-promotion, en passant, mate at move 3 accepted, wrong move mid-line, ramp widening, three lives, detectors on hand-built FENs
 Done when: `python -m pytest -q` is green with no puzzle database present.
 
 ## Phase 2 - Puzzle data
