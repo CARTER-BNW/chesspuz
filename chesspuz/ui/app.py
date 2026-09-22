@@ -97,6 +97,7 @@ class MainWindow(QMainWindow):
         from chesspuz.ui.leaderboard_page import LeaderboardPage
         from chesspuz.ui.review_page import ReviewPage
         from chesspuz.ui.run_page import RunPage
+        from chesspuz.ui.settings_page import SettingsPage
         from chesspuz.ui.stats_page import StatsPage
 
         self.home = HomePage(ctx)
@@ -104,7 +105,16 @@ class MainWindow(QMainWindow):
         self.review = ReviewPage(ctx, animation_ms=ctx.animation_ms())
         self.leaderboard = LeaderboardPage(ctx)
         self.stats = StatsPage(ctx)
-        for page in (self.home, self.run_page, self.review, self.leaderboard, self.stats):
+        self.settings = SettingsPage(ctx)
+        self.pages = (
+            self.home,
+            self.run_page,
+            self.review,
+            self.leaderboard,
+            self.stats,
+            self.settings,
+        )
+        for page in self.pages:
             self.stack.addWidget(page)
 
         self.home.start_requested.connect(self.start_run)
@@ -117,7 +127,34 @@ class MainWindow(QMainWindow):
         self.leaderboard.home_requested.connect(self.show_home)
         self.leaderboard.review_requested.connect(self.show_review)
         self.stats.home_requested.connect(self.show_home)
+        self.home.settings_requested.connect(self.show_settings)
+        self.settings.home_requested.connect(self.show_home)
+        self.settings.changed.connect(self.apply_settings)
+        self.settings.database_changed.connect(self.home.refresh)
+        self.apply_settings()
+        self.restore_geometry()
         self.show_home()
+
+    def apply_settings(self) -> None:
+        """Push live-changeable settings into the pages."""
+        animation = self.ctx.animation_ms()
+        coordinates = self.ctx.setting("coordinates", "1") == "1"
+        for board in (self.run_page.board, self.review.board):
+            board.animation_ms = animation
+            board.show_coordinates = coordinates
+            board.update()
+
+    def restore_geometry(self) -> None:
+        stored = self.ctx.setting("geometry", "")
+        if stored:
+            try:
+                self.restoreGeometry(bytes.fromhex(stored))
+            except ValueError:
+                pass
+
+    def show_settings(self) -> None:
+        self.settings.refresh()
+        self.stack.setCurrentWidget(self.settings)
 
     def show_home(self) -> None:
         self.home.refresh()
@@ -163,8 +200,22 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self.run_page.abort()
-        self.ctx.close()
+        self.ctx.set_setting("geometry", bytes(self.saveGeometry().data()).hex())
         event.accept()
+
+
+def app_icon():
+    """A white knight from the bundled piece set as the window icon."""
+    import chess
+    from PySide6.QtGui import QIcon
+
+    from chesspuz.ui.pieces import PieceCache
+
+    pieces = PieceCache()
+    icon = QIcon()
+    for size in (16, 32, 64, 128):
+        icon.addPixmap(pieces.pixmap(chess.Piece(chess.KNIGHT, chess.WHITE), size))
+    return icon
 
 
 def _dark_title_bar(window: QMainWindow) -> None:
@@ -187,11 +238,16 @@ def run(argv: list[str] | None = None) -> int:
     app = QApplication.instance() or QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName(APP_NAME)
     apply_dark_theme(app)
+    app.setWindowIcon(app_icon())
     ctx = AppContext()
     window = MainWindow(ctx)
     window.resize(1100, 760)
     window.setMinimumSize(760, 560)
+    window.restore_geometry()
     window.show()
     _dark_title_bar(window)
     window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
-    return app.exec()
+    try:
+        return app.exec()
+    finally:
+        ctx.close()
