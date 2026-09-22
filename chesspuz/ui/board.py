@@ -77,6 +77,7 @@ class BoardWidget(QWidget):
         self.pieces = pieces or PieceCache()
         self.annotations = Annotations()
         self.last_move: chess.Move | None = None
+        self.hint_move: chess.Move | None = None  # e.g. the engine's best move
         self.state = InputState.IDLE
         self.show_coordinates = True
         self._interactive = True
@@ -146,6 +147,7 @@ class BoardWidget(QWidget):
         self._cancel_animation()
         self.board = board.copy(stack=False)
         self.last_move = last_move
+        self.hint_move = None
         self._reset_input()
         self.update()
 
@@ -226,9 +228,14 @@ class BoardWidget(QWidget):
         self._apply(move)
         self.animation_finished.emit()
 
+    def set_hint(self, move: chess.Move | None) -> None:
+        self.hint_move = move
+        self.update()
+
     def _apply(self, move: chess.Move) -> None:
         self.board.push(move)
         self.last_move = move
+        self.hint_move = None
         self.state = self._idle_state()
         self._reset_input()
         self.update()
@@ -450,6 +457,9 @@ class BoardWidget(QWidget):
                 self.square_rect(square).topLeft(), self.pieces.pixmap(piece, size, dpr)
             )
 
+        if self.hint_move is not None and self._anim_move is None:
+            hint = self.hint_move
+            self._draw_arrow(painter, hint.from_square, hint.to_square, theme.HINT_ARROW)
         for arrow in self.annotations.arrows:
             self._draw_arrow(painter, arrow.tail, arrow.head, theme.ARROW_COLORS[arrow.brush])
         if (

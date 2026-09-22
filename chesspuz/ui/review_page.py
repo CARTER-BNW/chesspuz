@@ -7,6 +7,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QFont, QKeyEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 from chesspuz.review import PLAYED, SOLUTION, ReviewModel
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.board import BoardWidget, InputState
+from chesspuz.ui.engine import EngineWorker
 from chesspuz.userdb import RunPuzzleRecord, RunRecord
 
 WRONG_COLOR = QColor("#e57373")
@@ -37,6 +39,8 @@ class ReviewPage(QWidget):
         self.ctx = ctx
         self.model = ReviewModel([])
         self.run: RunRecord | None = None
+        self.engine: EngineWorker | None = None
+        self._engine_command: str | list[str] | None = None
 
         self.board = BoardWidget(animation_ms=animation_ms)
         self.board.move_played.connect(self._on_move_played)
@@ -81,6 +85,13 @@ class ReviewPage(QWidget):
         self.hint = QLabel()
         self.hint.setObjectName("muted")
         self.hint.setWordWrap(True)
+        self.engine_box = QCheckBox("Engine")
+        self.engine_box.setChecked(True)
+        self.engine_box.setVisible(False)
+        self.engine_box.toggled.connect(self._on_engine_toggled)
+        self.engine_label = QLabel()
+        self.engine_label.setObjectName("muted")
+        self.engine_label.setWordWrap(True)
         self.clear_button = QPushButton("Clear arrows")
         self.clear_button.clicked.connect(self.board.clear_annotations)
         self.home_button = QPushButton("Home")
@@ -107,6 +118,10 @@ class ReviewPage(QWidget):
         side.addLayout(nav)
         side.addWidget(self.back_to_line_button)
         side.addWidget(self.hint)
+        engine_row = QHBoxLayout()
+        engine_row.addWidget(self.engine_box)
+        engine_row.addWidget(self.engine_label, 1)
+        side.addLayout(engine_row)
         side.addStretch()
         bottom = QHBoxLayout()
         bottom.addWidget(self.clear_button)
@@ -145,6 +160,73 @@ class ReviewPage(QWidget):
             self.puzzle_list.setCurrentRow(0)
         self._refresh(animate=None)
         self.setFocus()
+
+    # -- engine --------------------------------------------------------------------------------
+
+    def set_engine(self, command: str | list[str] | None) -> None:
+        """Use ``command`` (a path or argv) for analysis; None or "" turns the engine off."""
+        if isinstance(command, str):
+            command = command.strip()
+        command = command or None
+        if command == self._engine_command and (self.engine is not None or command is None):
+            return
+        self.stop_engine()
+        self._engine_command = command
+        self.engine_box.setVisible(command is not None)
+        self.engine_label.setText("")
+        if command is not None and self.engine_box.isChecked():
+            self._start_engine()
+
+    def _start_engine(self) -> None:
+        if self._engine_command is None or self.engine is not None:
+            return
+        worker = EngineWorker(self._engine_command, parent=self)
+        worker.analysed.connect(self._on_analysed)
+        worker.failed.connect(self._on_engine_failed)
+        self.engine = worker
+        worker.start()
+        self._request_analysis()
+
+    def stop_engine(self) -> None:
+        if self.engine is not None:
+            self.engine.stop()
+            self.engine.wait(3000)
+            self.engine = None
+        self.board.set_hint(None)
+
+    def _on_engine_toggled(self, on: bool) -> None:
+        if on:
+            self._start_engine()
+        else:
+            self.stop_engine()
+            self.engine_label.setText("")
+
+    def _request_analysis(self) -> None:
+        if self.engine is None or self.model.current is None:
+            return
+        self.engine_label.setText("thinking...")
+        self.engine.request(self.model.board().fen())
+
+    def _on_analysed(self, fen: str, score: str, best: object) -> None:
+        if self.engine is None or fen != self.model.board().fen():
+            return
+        if best:
+            move = chess.Move.from_uci(str(best))
+            san = self.model.board().san(move)
+            self.engine_label.setText(f"{score}  best {san}")
+            if self.board.state is not InputState.ANIMATING:
+                self.board.set_hint(move)
+        else:
+            self.engine_label.setText(score)
+            self.board.set_hint(None)
+
+    def _on_engine_failed(self, message: str) -> None:
+        self.engine = None  # the worker thread exits on its own after failing
+        self.board.set_hint(None)
+        self.engine_box.blockSignals(True)
+        self.engine_box.setChecked(False)
+        self.engine_box.blockSignals(False)
+        self.engine_label.setText(f"engine failed: {message}")
 
     # -- model -> widgets ----------------------------------------------------------------------
 
@@ -187,6 +269,7 @@ class ReviewPage(QWidget):
             item.setFont(font)
             self.moves.addItem(item)
 
+        self._request_analysis()
         self.first_button.setEnabled(not model.at_start())
         self.prev_button.setEnabled(not model.at_start())
         self.next_button.setEnabled(not model.at_end() and not model.exploring)

@@ -143,6 +143,7 @@ class MainWindow(QMainWindow):
             board.animation_ms = animation
             board.show_coordinates = coordinates
             board.update()
+        self.review.set_engine(self.ctx.setting("engine_path", ""))
 
     def restore_geometry(self) -> None:
         stored = self.ctx.setting("geometry", "")
@@ -200,6 +201,7 @@ class MainWindow(QMainWindow):
                 event.ignore()
                 return
             self.run_page.abort()
+        self.review.stop_engine()
         self.ctx.set_setting("geometry", bytes(self.saveGeometry().data()).hex())
         event.accept()
 

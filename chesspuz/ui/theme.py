@@ -25,6 +25,7 @@ ARROW_COLORS: dict[Brush, QColor] = {
     Brush.BLUE: QColor(0, 72, 200, 205),
     Brush.YELLOW: QColor(230, 143, 0, 205),
 }
+HINT_ARROW = QColor(156, 39, 176, 190)  # engine best move
 HIGHLIGHT_COLORS: dict[Brush, QColor] = {
     Brush.GREEN: QColor(21, 120, 27, 150),
     Brush.RED: QColor(176, 40, 40, 150),
