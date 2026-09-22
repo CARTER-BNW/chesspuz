@@ -1,2 +1,4 @@
-# Runtime dependencies, one per line (e.g. pygame>=2.6)
-# Install: python -m pip install -r requirements.txt
+# Runtime dependencies. Install: python -m pip install -r requirements.txt
+chess>=1.11
+PySide6-Essentials>=6.8
+zstandard>=0.23

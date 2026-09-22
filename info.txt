@@ -1,0 +1,20 @@
+Chess.com types of puzzles
+Back Rank Mate  76%   
+Discovery  54%   
+Endgame Tactics  60%   
+Fork  63%   
+Hanging Piece  64%   
+Mate in 1  66%   
+Mate in 2  81%   
+Mate in 3+  73%   
+Mating Net  75%   
+Opposition  98%   
+Pawn Endgame  73%   
+Pin  69%   
+Promotion  63%   
+Queen Sacrifice  63%   
+Sacrifice  70%   
+Scholar's Mate  0%   
+Skewer  61%   
+Trapped Piece  60%   
+Under Promotion  0%  

@@ -7,6 +7,7 @@ requires-python = ">=3.12"
 pythonpath = ["."]
 testpaths = ["tests"]
 addopts = "-q"
+qt_api = "pyside6"
 
 [tool.ruff]
 line-length = 100

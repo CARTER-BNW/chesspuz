@@ -1,9 +1,9 @@
 # chesspuz
 
-a python gui
+Dark-mode PySide6 chess puzzle trainer: chess.com-style Survival mode on the Lichess puzzle database. Spec: docs/specs/survival-trainer.md
 
 ## Commands
-- Run: `python main.py`
+- Run: `python main.py` (GUI); `python main.py import --download` builds the puzzle DB once; `python main.py stats` prints puzzle counts
 - Test: `python -m pytest -q`
 - Lint + format: `ruff check . && ruff format .`
 - Install deps: `python -m pip install -r requirements.txt -r requirements-dev.txt`
@@ -23,6 +23,8 @@ a python gui
 - Keep this file under 60 lines: language rules go in `.claude/rules/`, one-off knowledge goes in `docs/`.
 
 ## Gotchas
-- (add things Claude got wrong twice, e.g. "use python, not python3")
+- PyQt6 is also installed on this machine: only ever import PySide6 (`Signal`, not `pyqtSignal`; `exec()`, not `exec_()`).
+- Headless modules (`themes`, `session`, `run`, `importer`, `puzzledb`, `userdb`) must not import Qt.
+- Data lives in `%LOCALAPPDATA%/chesspuz` (override `CHESSPUZ_DATA_DIR`), never in the repo.
 
 @docs/STATUS.md

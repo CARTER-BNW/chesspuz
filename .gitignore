@@ -28,3 +28,10 @@ __pycache__/
 build/
 dist/
 *.egg-info/
+
+# --- chesspuz data (lives in %LOCALAPPDATA%\chesspuz by default; never commit) ---
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.zst
+*.part

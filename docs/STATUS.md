@@ -1,16 +1,17 @@
 # STATUS - chesspuz
 last_updated: 2026-09-22
-phase: 0 - Setup (see docs/PLAN.md)
+phase: 1 - Pure game logic (see docs/PLAN.md)
 
 ## Next action
-- Run `python -m pytest -q`; fill in the README.md purpose; then plan the real phases in docs/PLAN.md
+- Write `chesspuz/puzzle.py`, `chesspuz/themes.py`, `chesspuz/session.py`, `chesspuz/run.py` with their tests; check with `python -m pytest -q`
 
 ## Blockers
 - none
 
 ## Last session
-- Done: scaffolded from the python template
+- Done: requirements decided and installed (chess, PySide6-Essentials, zstandard, pytest-qt); planned all phases (docs/PLAN.md); spec in docs/specs/survival-trainer.md; `paths.py` + offscreen Qt test setup
 - Failed / dead ends (do not retry):
 
 ## Verify with
 - `python -m pytest -q`
+- `ruff check . && ruff format .`
