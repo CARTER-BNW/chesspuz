@@ -61,6 +61,7 @@ class RunPage(QWidget):
         self.player: Player | None = None
         self.session: PuzzleSession | None = None
         self.total_puzzles: int | None = None  # practice queue length
+        self.puzzle_number = 0  # 1-based, fixed when the puzzle starts
         self._generation = 0
         self._phase = "idle"  # idle | opponent | solving | reply | playback | done | over
         self._playback: list[chess.Move] = []
@@ -193,6 +194,7 @@ class RunPage(QWidget):
             self._game_over()
             return
         self.session = session
+        self.puzzle_number = len(self.run.results) + 1
         puzzle = session.puzzle
         self.board.set_interactive(False)
         self.board.set_orientation(puzzle.solver)
@@ -318,13 +320,13 @@ class RunPage(QWidget):
             self.lives_label.setText("Practice")
             self.score_caption.setText("solved")
             total = f" of {self.total_puzzles}" if self.total_puzzles else ""
-            self.puzzle_label.setText(f"Puzzle {len(run.results) + 1}{total}")
+            self.puzzle_label.setText(f"Puzzle {self.puzzle_number}{total}")
             self.turn_label.setText("no lives, no score: just get it right")
         else:
             hearts = "♥ " * run.lives_left + "♡ " * (run.lives - run.lives_left)
             self.lives_label.setText(hearts.strip())
             self.score_caption.setText("score")
-            self.puzzle_label.setText(f"Puzzle {len(run.results) + 1}")
+            self.puzzle_label.setText(f"Puzzle {self.puzzle_number}")
             self.turn_label.setText(f"target rating ~{run.target_rating}")
         self.score_label.setText(str(run.score))
         self.streak_label.setText(f"streak {run.streak}  ·  best streak {run.best_streak}")

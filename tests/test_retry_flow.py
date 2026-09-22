@@ -65,6 +65,7 @@ def test_wrong_move_keeps_the_puzzle_and_next_moves_on(ctx, qtbot, monkeypatch, 
     assert run.lives_left == 2 and run.settled
     assert page.next_button.isEnabled() and page.solution_button.isEnabled()
     assert "Wrong" in page.banner.text()
+    assert page.puzzle_label.text() == "Puzzle 1"  # still the same puzzle after a mistake
     assert played[-2:] == ["move", "wrong"]  # opponent's move, then the buzz; no move applied
 
     page.board.move_played.emit(right_move(page))  # solved after the mistake
