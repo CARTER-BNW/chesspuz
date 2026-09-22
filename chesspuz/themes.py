@@ -101,8 +101,9 @@ THEME_MAP: dict[str, frozenset[str]] = {
 #: Types computed by replaying the solution (each gated on a Lichess theme, see ``derive_types``).
 DERIVED_TYPES: frozenset[str] = frozenset({OPPOSITION, QUEEN_SACRIFICE, SCHOLARS_MATE})
 
-#: Types so scarce that the importer keeps every puzzle carrying them.
-RARE_TYPES: frozenset[str] = frozenset({UNDER_PROMOTION, SCHOLARS_MATE})
+#: Types so scarce that the importer keeps every puzzle carrying them (under-promotion is
+#: under a thousand puzzles in the whole Lichess set; Scholar's Mate turned out to be common).
+RARE_TYPES: frozenset[str] = frozenset({UNDER_PROMOTION})
 
 #: Every Lichess theme the mapping refers to (used by the import report and a coverage test).
 MAPPED_THEMES: frozenset[str] = frozenset().union(*THEME_MAP.values()) | {"attackingF2F7"}

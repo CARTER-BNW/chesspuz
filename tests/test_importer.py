@@ -104,7 +104,7 @@ def test_cap_keeps_the_most_popular_per_bucket_and_type_but_all_rare_types(tmp_p
         kept_backrank = [f"br{i}" for i in range(6) if repo.get(f"br{i}") is not None]
         assert kept_backrank == ["br4", "br5"], ids  # two most popular in the 800 bucket
         assert repo.get("up1") is not None and repo.get("up2") is not None
-        assert repo.get("sch") is not None  # rare types are kept regardless of the cap
+        assert repo.get("sch") is not None  # alone in its own (bucket, type) heap
         assert repo.count() == 5
     assert report.rows_kept == 5
 

@@ -23,11 +23,11 @@ Done when: `python -m pytest -q` is green with no puzzle database present.
 
 ## Phase 2 - Puzzle data
 Outcome: the Lichess database is imported locally and the app can pick puzzles by rating and type.
-- [ ] `chesspuz/importer.py`: download to `.part`, stream `.zst`/`.csv`, filter, replay-validate, derive types, per-(bucket, type) cap, write SQLite + indexes + `theme_counts`, atomic swap; generator API yielding progress
-- [ ] `chesspuz/puzzledb.py`: PuzzleRepository `pick(lo, hi, types, seen)`, `get`, `counts_by_type`, `count`
-- [ ] `main.py` subcommands `import`, `stats`, `sample`; hand-built 20-row CSV in `tests/data/`
-- [ ] Run the real import once; record duration and per-type counts in docs/STATUS.md
-- [ ] `python main.py sample` -> `tests/data/sample.csv` (~10 real puzzles per type), committed; a test that needs the real DB is skipped when absent
+- [x] `chesspuz/importer.py`: download to `.part`, stream `.zst`/`.csv`, filter, replay-validate, derive types, per-(bucket, type) cap, write SQLite + indexes + `theme_counts`, atomic swap; generator API yielding progress
+- [x] `chesspuz/puzzledb.py`: PuzzleRepository `pick(lo, hi, types, seen)`, `get`, `counts_by_type`, `count`
+- [x] `main.py` subcommands `import`, `stats`, `sample`; hand-built 20-row CSV in `tests/data/`
+- [x] Run the real import once; record duration and per-type counts in docs/STATUS.md
+- [x] `python main.py sample` -> `tests/data/sample.csv` (~10 real puzzles per type), committed; a test that needs the real DB is skipped when absent
 Done when: `python main.py import tests/data/sample.csv --db <tmp>` then `stats` lists all 19 types, and the real DB reports >= 200k puzzles with every type non-empty.
 
 ## Phase 3 - User database and persistence
@@ -49,10 +49,10 @@ Done when: tests green and `python main.py board-demo` looks right at 100% and 1
 
 ## Phase 5 - App shell and Survival run
 Outcome: a complete Survival run can be played and saved from the GUI.
-- [ ] `ui/app.py`: QApplication (Fusion, dark scheme, QSS), MainWindow with stacked pages, dark title bar fallback
-- [ ] Home page: player selector (new/existing), type checkboxes with counts, All/None, Start, database status line
-- [ ] Run page: board, hearts, score, streak, target rating, puzzle number, side to move, Correct/Wrong banner, solution playback, auto-advance, End run with confirm
-- [ ] Game-over dialog (score, best score) -> Review or Home; run persisted as it goes
+- [x] `ui/app.py`: QApplication (Fusion, dark scheme, QSS), MainWindow with stacked pages, dark title bar fallback
+- [x] Home page: player selector (new/existing), type checkboxes with counts, All/None, Start, database status line
+- [x] Run page: board, hearts, score, streak, target rating, puzzle number, side to move, Correct/Wrong banner, solution playback, auto-advance, End run with confirm
+- [x] Game-over dialog (score, best score) -> Review or Home; run persisted as it goes
 Done when: `python main.py` plays a full run to three strikes on the real DB and `python main.py stats --runs` shows it saved.
 
 ## Phase 6 - Review and explore

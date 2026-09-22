@@ -74,6 +74,17 @@ def cmd_stats(args: argparse.Namespace) -> int:
         if args.themes:
             for name, count in repo.theme_counts().items():
                 print(f"  {name:<28}{count:>9,}")
+    if args.runs:
+        from chesspuz.userdb import UserDB
+
+        with UserDB(paths.user_db_path()) as users:
+            print("recent runs:")
+            for record in users.history(limit=args.runs):
+                print(
+                    f"  #{record.id} {record.started_at} {record.player_name:<12} "
+                    f"{record.status:<9} score {record.score:<3} "
+                    f"puzzles {record.puzzles_played:<3} max {record.max_rating_solved}"
+                )
     return 0
 
 
@@ -114,6 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
     stats = sub.add_parser("stats", help="show puzzle counts")
     stats.add_argument("--db")
     stats.add_argument("--themes", action="store_true", help="also list Lichess theme counts")
+    stats.add_argument("--runs", type=int, nargs="?", const=20, help="list recent runs")
     stats.set_defaults(func=cmd_stats)
 
     sample = sub.add_parser("sample", help="write a small sample CSV for the tests")
