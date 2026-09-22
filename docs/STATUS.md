@@ -1,6 +1,6 @@
 # STATUS - chesspuz
 last_updated: 2026-09-23
-phase: play-testing and polish (all planned phases done; feedback round 1 shipped)
+phase: play-testing and polish (all planned phases done; feedback rounds 1 and 2 shipped)
 
 ## Next action
 - Play a few real Survival runs with `python main.py`, note anything that feels off (ramp speed, animation, layout), then decide the first polish items. Optional: download Stockfish and set its path in Settings to get evaluations in Review.
@@ -14,6 +14,7 @@ phase: play-testing and polish (all planned phases done; feedback round 1 shippe
 - Scholar's Mate was exempt from the cap in that build; the code now only exempts Under Promotion. Rebuilding from Settings (or `python main.py import --download`) is optional and only trims Scholar's Mate a little.
 
 ## Last session
+- Done (2026-09-23, feedback round 2): Settings from a run with Back; Mute all + per-sound volumes; board and piece colours with preview; text size; Clear stats; per-puzzle timer; Played page; puzzle windows from Mistakes/Played/run overview; all-time best streak record. 150 tests.
 - Done (2026-09-23, feedback round 1): keep trying after a mistake with Show solution and Next; the last puzzle stays open after the third life; Mistakes page with practice sessions (runs with mode=practice, schema v2 migration); synthesised click/move/capture/correct/wrong sounds via winsound with a Sounds setting. 132 tests.
 - Done (2026-09-22): Phases 0-7. Plan and spec; pure game logic; Lichess importer + repository + CLI; user database with crash-safe runs; board widget (animation, promotion chooser, annotations, engine hint arrow); Home, Run, Review, Leaderboard/History, Stats and Settings pages; in-app database rebuild; optional Stockfish analysis in Review. 113 tests, ruff clean.
 - Bugs found by screenshot scripts and fixed: rapid navigation during an animation; set_interactive() cancelling the opponent's reply animation.

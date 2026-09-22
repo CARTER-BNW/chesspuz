@@ -7,7 +7,10 @@ First run: `python main.py import --download` (one-time, about 300 MB) builds th
 ## How to play
 - Home: pick a player name and the puzzle types, then Start Survival. Puzzles begin around rating 600 and climb 40 points per solved puzzle (adjustable in Settings). End run keeps the score.
 - Mistakes: the first wrong move on a puzzle costs a life, but the puzzle stays on the board. Keep trying, press Show solution to see the line, or Next to move on. Three lost lives end the run after the current puzzle. Every puzzle you got wrong lands on the Mistakes page, where Practise replays them with no lives or score until they are fixed.
-- Sounds: clicks, piece moves, captures and a chime or buzz for right and wrong; switch them off in Settings.
+- Sounds: clicks, piece moves, captures and a chime or buzz for right and wrong. Settings has Mute all and a volume slider per sound.
+- Settings (also reachable from a run): board and piece colours with a preview, text size, animation speed, the difficulty ramp, Clear stats per player, the Stockfish path and the database rebuild.
+- Timer: the time on the current puzzle is shown for information only; each puzzle's time appears in the run overview, in Review and on the Played page.
+- Played: every attempt you made. Double-click any puzzle there, on Mistakes, or in the run overview to play it again in its own window (Show solution, Try again). The first attempt in a window counts as practice.
 - Board: click-click or drag to move, drop the king on its rook to castle, pick the piece when a pawn promotes. Right-drag draws an arrow, right-click highlights a square (Shift/Ctrl/Alt change the colour), any left click clears them.
 - Review: after a run (or from the Leaderboard and History) step through every puzzle, compare your moves with the solution, and play any move to explore; Back to the line returns.
 - Engine (optional): download Stockfish from https://stockfishchess.org, unzip it, and set the executable path in Settings to see the evaluation and best move while exploring in Review.

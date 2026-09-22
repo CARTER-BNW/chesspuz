@@ -85,4 +85,8 @@ Done when: leaderboard filters by type set, settings change the next run, GUI im
 - 2026-09-23: a wrong move costs one life per puzzle but the puzzle stays open (keep trying, Show solution, Next) - the user wants to learn, not be shown the answer; solving after a mistake scores nothing so Survival stays honest
 - 2026-09-23: practice sessions are runs with mode=practice - Review and History work unchanged, leaderboards ignore them
 - 2026-09-23: sounds are synthesised in code and played with winsound - no audio assets, no QtMultimedia (not in PySide6-Essentials)
+- 2026-09-23: per-sound volume is done by re-rendering the clip - winsound has no mixer
+- 2026-09-23: piece colours recolour the SVG body tokens per side; outlines and light details stay - simple and reversible
+- 2026-09-23: a puzzle window records only its first attempt as a one-puzzle practice session; an untouched window leaves no run behind
+- 2026-09-23: best streak shows this run's best and an all-time record computed from run history (no schema change)
 
