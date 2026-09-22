@@ -65,11 +65,11 @@ Done when: tests green and every puzzle of a saved run steps through; a variatio
 
 ## Phase 7 - Leaderboard, stats, settings, engine
 Outcome: runs compare on leaderboards, per-type accuracy is visible, settings persist, Stockfish is optional.
-- [ ] Leaderboard page (rank, player, score, max rating, time, date; filter by type set) and History page
-- [ ] Stats page: per-type attempts / solved / accuracy like info.txt, totals, best score
-- [ ] Settings page: ramp values, animation speed, default player, data path, re-import with progress and cancel in a worker thread, repository reopened after the swap
-- [ ] Keyboard shortcuts, remembered window geometry, app icon
-- [ ] Optional: Stockfish path setting; Review explore shows eval + best-move arrow via chess.engine in a worker; works without an engine
+- [x] Leaderboard page (rank, player, score, max rating, time, date; filter by type set) and History page
+- [x] Stats page: per-type attempts / solved / accuracy like info.txt, totals, best score
+- [x] Settings page: ramp values, animation speed, default player, data path, re-import with progress and cancel in a worker thread, repository reopened after the swap
+- [x] Keyboard shortcuts, remembered window geometry, app icon
+- [x] Optional: Stockfish path setting; Review explore shows eval + best-move arrow via chess.engine in a worker; works without an engine
 Done when: leaderboard filters by type set, settings change the next run, GUI import completes without restart, and (if configured) eval updates while exploring.
 
 ## Decisions
@@ -81,3 +81,4 @@ Done when: leaderboard filters by type set, settings change the next run, GUI im
 - 2026-09-22: importer caps per (rating bucket, type) instead of per bucket - a popularity cap per bucket starves rare types like under-promotion
 - 2026-09-22: no visible clock in Survival - the user asked for no time pressure; solve times are recorded only for leaderboard tie-breaks
 - 2026-09-22: Stockfish analysis is optional and last - the app must be complete without an external binary
+- 2026-09-22: Stockfish is configured by path in Settings and only used in Review - keeps the download and licence separate from the app; a fake UCI engine covers the tests
