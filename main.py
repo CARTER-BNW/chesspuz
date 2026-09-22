@@ -5,6 +5,7 @@
 ``python main.py import FILE``     build the database from a local .csv or .csv.zst
 ``python main.py stats``           show puzzle counts per type
 ``python main.py sample``          write tests/data/sample.csv from the database
+``python main.py board-demo``      open a free-play board to try the widget
 """
 
 from __future__ import annotations
@@ -86,6 +87,12 @@ def cmd_sample(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_board_demo(_args: argparse.Namespace) -> int:
+    from chesspuz.ui.demo import run_board_demo
+
+    return run_board_demo()
+
+
 def _print_counts(counts: dict[str, int]) -> None:
     for name, count in counts.items():
         print(f"  {name:<18}{count:>9,}")
@@ -114,6 +121,9 @@ def build_parser() -> argparse.ArgumentParser:
     sample.add_argument("--out", default="tests/data/sample.csv")
     sample.add_argument("--per-type", type=int, default=10)
     sample.set_defaults(func=cmd_sample)
+
+    demo = sub.add_parser("board-demo", help="open a free-play board")
+    demo.set_defaults(func=cmd_board_demo)
     return parser
 
 

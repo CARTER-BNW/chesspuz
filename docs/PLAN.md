@@ -40,11 +40,11 @@ Done when: `python -m pytest -q` is green including the persistence tests.
 
 ## Phase 4 - Board widget
 Outcome: a playable, dark, DPI-aware board with annotations, usable standalone.
-- [ ] `ui/pieces.py`: chess.svg pieces -> QSvgRenderer -> QPixmap cache keyed (piece, size, dpr)
-- [ ] `ui/annotations.py`: Arrow/Highlight model, toggle semantics, colour from modifiers (pure Python)
-- [ ] `ui/board.py`: drawing, orientation, click-click and drag moves, legal dots, last-move and check highlights, inline promotion chooser, animation with generation counter, input state machine, right-button annotations, NoContextMenu
-- [ ] `main.py board-demo` free-play window
-- [ ] pytest-qt tests: rendered pixmap non-transparent, click-click, drag, promotion, black orientation, arrows/highlights/clear
+- [x] `ui/pieces.py`: chess.svg pieces -> QSvgRenderer -> QPixmap cache keyed (piece, size, dpr)
+- [x] `ui/annotations.py`: Arrow/Highlight model, toggle semantics, colour from modifiers (pure Python)
+- [x] `ui/board.py`: drawing, orientation, click-click and drag moves, legal dots, last-move and check highlights, inline promotion chooser, animation with generation counter, input state machine, right-button annotations, NoContextMenu
+- [x] `main.py board-demo` free-play window
+- [x] pytest-qt tests: rendered pixmap non-transparent, click-click, drag, promotion, black orientation, arrows/highlights/clear
 Done when: tests green and `python main.py board-demo` looks right at 100% and 150% scaling.
 
 ## Phase 5 - App shell and Survival run
