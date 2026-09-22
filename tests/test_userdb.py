@@ -4,7 +4,7 @@ import chess
 import pytest
 
 from chesspuz.run import RampSettings
-from chesspuz.userdb import ABANDONED, FINISHED, QUIT, UserDB
+from chesspuz.userdb import ABANDONED, FINISHED, PRACTICE, QUIT, SURVIVAL, UserDB
 from tests import puzzles
 from tests.test_run import FakeClock, FakePool
 
@@ -168,3 +168,76 @@ def test_closed_database_raises(tmp_path: Path) -> None:
     db.close()
     db.close()
     assert RampSettings().start == 600
+
+
+V1_SCHEMA = """
+CREATE TABLE schema_version (version INTEGER NOT NULL);
+INSERT INTO schema_version VALUES (1);
+CREATE TABLE players (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE, created_at TEXT NOT NULL);
+CREATE TABLE runs (
+    id INTEGER PRIMARY KEY, player_id INTEGER NOT NULL REFERENCES players(id),
+    started_at TEXT NOT NULL, ended_at TEXT, status TEXT NOT NULL,
+    score INTEGER NOT NULL DEFAULT 0, lives_lost INTEGER NOT NULL DEFAULT 0,
+    types_json TEXT NOT NULL, start_rating INTEGER NOT NULL, step INTEGER NOT NULL,
+    max_rating_solved INTEGER NOT NULL DEFAULT 0, total_ms INTEGER NOT NULL DEFAULT 0
+);
+INSERT INTO players VALUES (1, 'Old', '2026-09-01T10:00:00');
+INSERT INTO runs (id, player_id, started_at, status, score, types_json, start_rating, step)
+    VALUES (7, 1, '2026-09-01T10:00:00', 'finished', 4, '["Fork"]', 600, 40);
+"""
+
+
+def test_schema_v1_databases_are_migrated(tmp_path: Path) -> None:
+    import sqlite3
+
+    path = tmp_path / "old.sqlite"
+    conn = sqlite3.connect(path)
+    conn.executescript(V1_SCHEMA)
+    conn.close()
+    with UserDB(path) as db:
+        assert db._db.execute("SELECT version FROM schema_version").fetchone()[0] == 2
+        record = db.run(7)
+        assert record.mode == SURVIVAL and record.score == 4
+        assert db.leaderboard()[0].id == 7
+    with UserDB(path) as db:  # opening again must not migrate twice
+        assert db.run(7).mode == SURVIVAL
+
+
+def test_practice_runs_stay_off_the_leaderboard_and_feed_the_mistakes_list(db: UserDB) -> None:
+    clock = FakeClock()
+    player = db.get_or_create_player("Alice")
+    finished_run(db, player.id, solves=1, clock=clock)  # backrank failed three times
+    mistakes = db.mistakes(player.id)
+    assert [m.puzzle.id for m in mistakes] == ["backrank"]
+    assert mistakes[0].times_failed == 3 and mistakes[0].still_wrong
+    assert mistakes[0].last_practice is None and mistakes[0].puzzle.types == {
+        "Back Rank Mate",
+        "Mate in 1",
+    }
+    assert db.mistakes(999) == []
+
+    run_id, run = db.new_practice(player.id, [m.puzzle for m in mistakes], clock=clock)
+    assert run.practice and run.lives == 0
+    run.next_puzzle()
+    play(run, "e1e8")
+    assert run.next_puzzle() is None and run.finished
+    db.finish_run(run_id, run)
+    record = db.run(run_id)
+    assert record.mode == PRACTICE and record.status == FINISHED and not record.scored
+    assert record.types == ("Back Rank Mate", "Mate in 1")
+    assert [r.mode for r in db.history(player.id)] == [PRACTICE, SURVIVAL]
+    assert all(r.mode == SURVIVAL for r in db.leaderboard())
+    assert db.summary(player.id)["runs"] == 1 and db.type_sets() == [("Mate in 1",)]
+    assert db.best_score(player.id, ["Back Rank Mate", "Mate in 1"]) == 0
+
+    fixed = db.mistakes(player.id)
+    assert fixed[0].last_practice == "solved" and not fixed[0].still_wrong
+
+    run_id, run = db.new_practice(player.id, [fixed[0].puzzle])
+    run.next_puzzle()
+    play(run, "e1e7")
+    run.reveal_solution()
+    run.next_puzzle()
+    db.finish_run(run_id, run)
+    again = db.mistakes(player.id)
+    assert again[0].last_practice == "failed" and again[0].still_wrong

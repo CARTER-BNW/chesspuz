@@ -3,6 +3,10 @@
 The run owns the difficulty ramp and the lives/score bookkeeping. It gets puzzles through a
 ``pick`` callable so it works against the real puzzle database or a fake in tests, and reports
 each finished puzzle through an optional ``on_result`` callback so storage can persist as it goes.
+
+A puzzle is recorded exactly once: at its first mistake (a life is lost) or at a clean solve (a
+point is scored). After a mistake the player may keep trying for free; solving it then earns
+nothing. Practice mode never loses lives and ends when the pick callable runs out of puzzles.
 """
 
 from __future__ import annotations
@@ -63,8 +67,20 @@ class PuzzleResult:
     target_rating: int
     solved: bool
     solve_ms: int
-    player_moves: list[str]  # what was played, including a failing move
+    player_moves: list[str]  # what was played, up to and including the first mistake
     alternate_mate: bool = False
+
+
+def queue_pick(puzzles: Collection[Puzzle]) -> PickFn:
+    """A pick callable for practice: hands out ``puzzles`` in order, ignoring ratings."""
+    remaining = list(puzzles)
+
+    def pick(
+        _lo: int, _hi: int, _types: Collection[str], _exclude: frozenset[str]
+    ) -> Puzzle | None:
+        return remaining.pop(0) if remaining else None
+
+    return pick
 
 
 class SurvivalRun:
@@ -78,12 +94,14 @@ class SurvivalRun:
         seen: Collection[str] = (),
         on_result: Callable[[PuzzleResult], None] | None = None,
         clock: Callable[[], float] = time.monotonic,
+        practice: bool = False,
     ) -> None:
         self.types = tuple(types)
         self.pick = pick
         self.ramp = ramp or RampSettings()
-        self.lives = lives
-        self.lives_left = lives
+        self.practice = practice
+        self.lives = 0 if practice else lives
+        self.lives_left = self.lives
         self.seen: set[str] = set(seen)
         self.on_result = on_result
         self.clock = clock
@@ -96,7 +114,7 @@ class SurvivalRun:
         self.max_rating_solved = 0
         self.total_ms = 0
         self.finished = False
-        self.ended_by: str | None = None  # "lives" or "quit"
+        self.ended_by: str | None = None  # "lives", "quit" or "done" (practice queue empty)
         self._target = 0
         self._started_at: float | None = None
 
@@ -116,15 +134,34 @@ class SurvivalRun:
     def playing(self) -> bool:
         return self.session is not None and self.session.status is Status.PLAYING
 
+    @property
+    def settled(self) -> bool:
+        """True when the current puzzle has been recorded (solved, failed or revealed)."""
+        if self.session is None:
+            return True
+        return self.session.status is not Status.PLAYING or self.session.failed
+
     # -- transitions ---------------------------------------------------------------------------
 
-    def next_puzzle(self) -> PuzzleSession:
-        """Pick the next puzzle and start its session. Raises NoPuzzles if nothing matches."""
+    def next_puzzle(self) -> PuzzleSession | None:
+        """Pick the next puzzle and start its session.
+
+        Returns None when a practice queue is exhausted (the run is then finished). Raises
+        NoPuzzles when a Survival run finds nothing matching the selected types.
+        """
         if self.finished:
             raise RuntimeError("the run is over")
-        if self.playing:
+        if not self.settled:
             raise RuntimeError("the current puzzle is still being solved")
-        puzzle = self._pick()
+        try:
+            puzzle = self._pick()
+        except NoPuzzles:
+            if not self.practice:
+                raise
+            self.finished = True
+            self.ended_by = "done"
+            self.session = None
+            return None
         self._target = self.ramp.target(self.score)
         self.seen.add(puzzle.id)
         self.session = PuzzleSession(puzzle)
@@ -136,14 +173,26 @@ class SurvivalRun:
         self._started_at = self.clock()
 
     def try_move(self, move: chess.Move) -> Outcome:
-        if self.session is None or self.finished:
+        """Play a move on the current puzzle; allowed even after the run is over (practice)."""
+        if self.session is None:
             return Outcome.NOT_PLAYING
-        outcome = self.session.try_move(move)
-        if outcome is Outcome.COMPLETE:
+        session = self.session
+        outcome = session.try_move(move)
+        if outcome is Outcome.COMPLETE and not session.failed:
             self._finish(solved=True)
-        elif outcome is Outcome.WRONG:
+        elif outcome is Outcome.WRONG and session.mistakes == 1:
             self._finish(solved=False)
         return outcome
+
+    def reveal_solution(self) -> list[chess.Move]:
+        """Show the solution of the current puzzle; costs a life unless already failed."""
+        if self.session is None or self.session.status is not Status.PLAYING:
+            return []
+        was_failed = self.session.failed
+        moves = self.session.reveal()
+        if not was_failed:
+            self._finish(solved=False)
+        return moves
 
     def quit(self) -> None:
         """End the run early; an unfinished puzzle is not counted."""
@@ -182,11 +231,12 @@ class SurvivalRun:
             self.best_streak = max(self.best_streak, self.streak)
             self.max_rating_solved = max(self.max_rating_solved, puzzle.rating)
         else:
-            self.lives_left -= 1
             self.streak = 0
+            if not self.practice:
+                self.lives_left -= 1
         self.results.append(result)
         if self.on_result is not None:
             self.on_result(result)
-        if self.lives_left <= 0:
+        if not self.practice and self.lives_left <= 0:
             self.finished = True
             self.ended_by = "lives"

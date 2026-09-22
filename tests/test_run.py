@@ -4,7 +4,14 @@ import chess
 import pytest
 
 from chesspuz.puzzle import Puzzle
-from chesspuz.run import NoPuzzles, PuzzleResult, RampSettings, SurvivalRun, Window
+from chesspuz.run import (
+    NoPuzzles,
+    PuzzleResult,
+    RampSettings,
+    SurvivalRun,
+    Window,
+    queue_pick,
+)
 from chesspuz.session import Outcome
 from tests import puzzles
 
@@ -74,7 +81,9 @@ def test_run_ends_after_three_wrong_moves_and_records_everything() -> None:
     assert run.total_ms == 1500
     with pytest.raises(RuntimeError):
         run.next_puzzle()
-    assert mate(run, "e1e8") is Outcome.NOT_PLAYING
+    # the last puzzle stays open for practice: solving it now changes nothing
+    assert mate(run, "e1e8") is Outcome.COMPLETE
+    assert run.score == 1 and len(results) == 4 and run.lives_left == 0
 
 
 def test_windows_widen_until_an_unseen_puzzle_fits_then_allow_seen() -> None:
@@ -92,6 +101,58 @@ def test_windows_widen_until_an_unseen_puzzle_fits_then_allow_seen() -> None:
     assert pool.queries[-1][2] == frozenset()
     assert len(pool.queries) == 6
     assert run.session.puzzle.id == "smothered"
+
+
+def test_retries_are_free_and_solving_after_a_mistake_scores_nothing() -> None:
+    results: list[PuzzleResult] = []
+    run = SurvivalRun(["Mate in 1"], FakePool([puzzles.BACK_RANK]).pick, on_result=results.append)
+    run.next_puzzle()
+    assert not run.settled
+    assert mate(run, "e1e7") is Outcome.WRONG
+    assert run.lives_left == 2 and len(results) == 1 and not results[0].solved
+    assert run.settled  # recorded: Next is allowed even though the player may keep trying
+    assert mate(run, "e1e6") is Outcome.WRONG
+    assert run.lives_left == 2 and len(results) == 1
+    assert mate(run, "e1e8") is Outcome.COMPLETE
+    assert run.score == 0 and len(results) == 1 and run.streak == 0
+    assert run.next_puzzle() is not None
+
+
+def test_reveal_costs_a_life_only_when_the_puzzle_was_still_clean() -> None:
+    results: list[PuzzleResult] = []
+    run = SurvivalRun(["Mate in 1"], FakePool([puzzles.BACK_RANK]).pick, on_result=results.append)
+    run.next_puzzle()
+    revealed = run.reveal_solution()
+    assert [m.uci() for m in revealed] == ["e1e8"]
+    assert run.lives_left == 2 and results[-1].solved is False and results[-1].player_moves == []
+    assert run.session.board.is_checkmate() and run.settled
+    assert run.reveal_solution() == []  # already over
+    run.next_puzzle()
+    mate(run, "e1e7")
+    assert run.lives_left == 1
+    run.reveal_solution()
+    assert run.lives_left == 1 and len(results) == 2  # no second charge
+    assert results[-1].player_moves == ["e1e7"]
+
+
+def test_practice_mode_has_no_lives_and_ends_when_the_queue_is_empty() -> None:
+    results: list[PuzzleResult] = []
+    queue = queue_pick([puzzles.BACK_RANK, puzzles.SMOTHERED])
+    run = SurvivalRun([], queue, practice=True, on_result=results.append)
+    assert run.lives == 0 and run.practice
+    assert run.next_puzzle().puzzle.id == "backrank"
+    assert mate(run, "e1e7") is Outcome.WRONG
+    assert run.lives_left == 0 and not run.finished
+    run.reveal_solution()
+    assert run.next_puzzle().puzzle.id == "smothered"
+    mate(run, "c4g8")
+    mate(run, "h6f7")
+    assert run.score == 1
+    assert run.next_puzzle() is None
+    assert run.finished and run.ended_by == "done" and run.session is None
+    assert [r.solved for r in results] == [False, True]
+    with pytest.raises(RuntimeError):
+        run.next_puzzle()
 
 
 def test_no_matching_puzzle_raises() -> None:

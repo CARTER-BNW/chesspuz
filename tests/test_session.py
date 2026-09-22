@@ -30,15 +30,34 @@ def test_correct_move_applies_the_reply_then_final_move_completes() -> None:
     assert s.try_move(move("g1h1")) is Outcome.NOT_PLAYING
 
 
-def test_wrong_move_fails_and_leaves_the_board_unchanged() -> None:
+def test_wrong_move_counts_a_mistake_and_lets_the_player_keep_trying() -> None:
     s = PuzzleSession(puzzles.SMOTHERED)
     before = s.board.fen()
     assert s.try_move(move("c4c8")) is Outcome.WRONG
-    assert s.status is Status.FAILED
+    assert s.status is Status.PLAYING and s.failed and s.mistakes == 1
     assert s.board.fen() == before
     assert s.wrong_move == move("c4c8")
     assert s.player_line() == ["c4c8"]
     assert [m.uci() for m in s.remaining_solution()] == ["c4g8", "f8g8", "h6f7"]
+    assert s.expected == move("c4g8") and s.moves_left == 2
+    assert s.try_move(move("c4c7")) is Outcome.WRONG
+    assert s.mistakes == 2 and s.player_line() == ["c4c8"]  # the first mistake is the record
+    assert s.try_move(move("c4g8")) is Outcome.CORRECT
+    assert s.try_move(move("h6f7")) is Outcome.COMPLETE
+    assert s.status is Status.SOLVED and s.failed  # solved, but not cleanly
+    assert s.player_line() == ["c4c8"]
+
+
+def test_reveal_plays_the_rest_of_the_solution_and_closes_the_session() -> None:
+    s = PuzzleSession(puzzles.SMOTHERED)
+    s.try_move(move("c4g8"))
+    revealed = s.reveal()
+    assert [m.uci() for m in revealed] == ["h6f7"]
+    assert s.status is Status.REVEALED and s.revealed and s.failed
+    assert s.board.is_checkmate()
+    assert s.try_move(move("g1h1")) is Outcome.NOT_PLAYING
+    assert s.reveal() == []
+    assert s.player_line() == ["c4g8", "f8g8"]  # no mistake: what was actually played
     assert s.expected is None and s.moves_left == 0
 
 
@@ -48,6 +67,7 @@ def test_wrong_move_mid_line_keeps_the_moves_played_so_far() -> None:
     assert s.try_move(move("g1h1")) is Outcome.WRONG
     assert s.player_line() == ["c4g8", "f8g8", "g1h1"]
     assert [m.uci() for m in s.remaining_solution()] == ["h6f7"]
+    assert s.status is Status.PLAYING
 
 
 def test_any_checkmate_wins_even_off_the_canonical_line() -> None:

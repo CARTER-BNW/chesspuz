@@ -16,9 +16,9 @@ from pathlib import Path
 
 from chesspuz import themes
 from chesspuz.puzzle import Puzzle
-from chesspuz.run import PickFn, PuzzleResult, RampSettings, SurvivalRun
+from chesspuz.run import PickFn, PuzzleResult, RampSettings, SurvivalRun, queue_pick
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS players (
@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS runs (
     start_rating INTEGER NOT NULL,
     step INTEGER NOT NULL,
     max_rating_solved INTEGER NOT NULL DEFAULT 0,
-    total_ms INTEGER NOT NULL DEFAULT 0
+    total_ms INTEGER NOT NULL DEFAULT 0,
+    mode TEXT NOT NULL DEFAULT 'survival'
 );
 CREATE INDEX IF NOT EXISTS idx_runs_player ON runs(player_id, status);
 CREATE TABLE IF NOT EXISTS run_puzzles (
@@ -65,6 +66,8 @@ FINISHED = "finished"  # ended by the third lost life
 QUIT = "quit"  # ended early by the player; the score still counts
 ABANDONED = "abandoned"  # app closed or crashed mid-run
 SCORED_STATUSES = (FINISHED, QUIT)
+SURVIVAL = "survival"
+PRACTICE = "practice"
 
 
 def _now() -> str:
@@ -98,10 +101,11 @@ class RunRecord:
     max_rating_solved: int
     total_ms: int
     puzzles_played: int
+    mode: str = SURVIVAL
 
     @property
     def scored(self) -> bool:
-        return self.status in SCORED_STATUSES
+        return self.status in SCORED_STATUSES and self.mode == SURVIVAL
 
 
 @dataclass(frozen=True)
@@ -126,6 +130,20 @@ class RunPuzzleRecord:
     @property
     def puzzle(self) -> Puzzle:
         return Puzzle(self.puzzle_id, self.fen, self.moves, self.rating, types=self.types)
+
+
+@dataclass(frozen=True)
+class Mistake:
+    """A puzzle failed in Survival, with how practice went since."""
+
+    puzzle: Puzzle
+    times_failed: int
+    last_failed_at: str
+    last_practice: str | None  # "solved", "failed" or None when never practised
+
+    @property
+    def still_wrong(self) -> bool:
+        return self.last_practice != "solved"
 
 
 @dataclass(frozen=True)
@@ -160,6 +178,9 @@ class UserDB:
             row = conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 conn.execute("INSERT INTO schema_version VALUES (?)", (SCHEMA_VERSION,))
+            elif row[0] < 2:
+                conn.execute("ALTER TABLE runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'survival'")
+                conn.execute("UPDATE schema_version SET version = 2")
         self.conn = conn
         self.abandon_active_runs()
         return self
@@ -218,12 +239,14 @@ class UserDB:
 
     # -- run lifecycle -------------------------------------------------------------------------
 
-    def start_run(self, player_id: int, types: Collection[str], ramp: RampSettings) -> int:
+    def start_run(
+        self, player_id: int, types: Collection[str], ramp: RampSettings, mode: str = SURVIVAL
+    ) -> int:
         with self._db:
             cursor = self._db.execute(
-                "INSERT INTO runs (player_id, started_at, status, types_json, start_rating, step)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (player_id, _now(), ACTIVE, _types_json(types), ramp.start, ramp.step),
+                "INSERT INTO runs (player_id, started_at, status, types_json, start_rating, step,"
+                " mode) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (player_id, _now(), ACTIVE, _types_json(types), ramp.start, ramp.step, mode),
             )
         return int(cursor.lastrowid or 0)
 
@@ -264,7 +287,7 @@ class UserDB:
             )
 
     def finish_run(self, run_id: int, run: SurvivalRun) -> None:
-        status = FINISHED if run.ended_by == "lives" else QUIT
+        status = QUIT if run.ended_by == "quit" else FINISHED
         with self._db:
             self._db.execute(
                 "UPDATE runs SET status = ?, ended_at = ?, score = ?, lives_lost = ?,"
@@ -295,10 +318,11 @@ class UserDB:
         pick: PickFn,
         ramp: RampSettings | None = None,
         clock: Callable[[], float] | None = None,
+        mode: str = SURVIVAL,
     ) -> tuple[int, SurvivalRun]:
         """Start a persisted run: unseen puzzles are preferred and every result is saved."""
         ramp = ramp or RampSettings()
-        run_id = self.start_run(player_id, types, ramp)
+        run_id = self.start_run(player_id, types, ramp, mode)
         kwargs = {} if clock is None else {"clock": clock}
         run = SurvivalRun(
             types,
@@ -306,9 +330,20 @@ class UserDB:
             ramp=ramp,
             seen=self.seen_puzzle_ids(player_id),
             on_result=lambda result: self.record_puzzle(run_id, result),
+            practice=(mode == PRACTICE),
             **kwargs,
         )
         return run_id, run
+
+    def new_practice(
+        self,
+        player_id: int,
+        puzzles: Collection[Puzzle],
+        clock: Callable[[], float] | None = None,
+    ) -> tuple[int, SurvivalRun]:
+        """A practice session over ``puzzles`` in order: no lives, saved with mode 'practice'."""
+        types = sorted({t for puzzle in puzzles for t in puzzle.types})
+        return self.new_run(player_id, types, queue_pick(puzzles), clock=clock, mode=PRACTICE)
 
     # -- queries -------------------------------------------------------------------------------
 
@@ -334,9 +369,9 @@ class UserDB:
         player_id: int | None = None,
         limit: int = 20,
     ) -> list[RunRecord]:
-        """Best scored runs: score desc, then less total time. ``types`` = exact type set."""
-        where = [f"r.status IN ({','.join('?' * len(SCORED_STATUSES))})"]
-        params: list[object] = list(SCORED_STATUSES)
+        """Best scored Survival runs: score desc, then less time. ``types`` = exact type set."""
+        where = [f"r.status IN ({','.join('?' * len(SCORED_STATUSES))})", "r.mode = ?"]
+        params: list[object] = [*SCORED_STATUSES, SURVIVAL]
         if types is not None:
             where.append("r.types_json = ?")
             params.append(_types_json(types))
@@ -355,9 +390,9 @@ class UserDB:
 
     def best_score(self, player_id: int, types: Collection[str]) -> int:
         row = self._db.execute(
-            "SELECT MAX(score) FROM runs WHERE player_id = ? AND types_json = ?"
+            "SELECT MAX(score) FROM runs WHERE player_id = ? AND types_json = ? AND mode = ?"
             f" AND status IN ({','.join('?' * len(SCORED_STATUSES))})",
-            (player_id, _types_json(types), *SCORED_STATUSES),
+            (player_id, _types_json(types), SURVIVAL, *SCORED_STATUSES),
         ).fetchone()
         return int(row[0] or 0)
 
@@ -379,16 +414,16 @@ class UserDB:
         """Distinct type selections used by scored runs, most used first."""
         rows = self._db.execute(
             "SELECT types_json, COUNT(*) AS n FROM runs"
-            f" WHERE status IN ({','.join('?' * len(SCORED_STATUSES))})"
+            f" WHERE status IN ({','.join('?' * len(SCORED_STATUSES))}) AND mode = ?"
             " GROUP BY types_json ORDER BY n DESC, types_json",
-            SCORED_STATUSES,
+            (*SCORED_STATUSES, SURVIVAL),
         ).fetchall()
         return [tuple(json.loads(row["types_json"])) for row in rows]
 
     def summary(self, player_id: int | None = None) -> dict[str, float]:
         """Runs played, best and average score, puzzles attempted and solved."""
-        where = f"status IN ({','.join('?' * len(SCORED_STATUSES))})"
-        params: list[object] = list(SCORED_STATUSES)
+        where = f"status IN ({','.join('?' * len(SCORED_STATUSES))}) AND mode = ?"
+        params: list[object] = [*SCORED_STATUSES, SURVIVAL]
         if player_id is not None:
             where += " AND player_id = ?"
             params.append(player_id)
@@ -397,10 +432,10 @@ class UserDB:
             f" COALESCE(AVG(score), 0) AS avg FROM runs WHERE {where}",
             params,
         ).fetchone()
-        puzzle_where = "1=1"
-        puzzle_params: list[object] = []
+        puzzle_where = "r.mode = ?"
+        puzzle_params: list[object] = [SURVIVAL]
         if player_id is not None:
-            puzzle_where = "r.player_id = ?"
+            puzzle_where += " AND r.player_id = ?"
             puzzle_params.append(player_id)
         puzzles = self._db.execute(
             "SELECT COUNT(*) AS attempted,"
@@ -415,6 +450,41 @@ class UserDB:
             "attempted": int(puzzles["attempted"]),
             "solved": int(puzzles["solved"]),
         }
+
+    def mistakes(self, player_id: int) -> list[Mistake]:
+        """Puzzles failed in Survival: still-wrong ones first, then most recent failure first."""
+        failed = self._db.execute(
+            "SELECT rp.puzzle_id, rp.fen, rp.moves, rp.rating, rp.types_json,"
+            " COUNT(*) AS times_failed, MAX(r.started_at) AS last_failed_at"
+            " FROM run_puzzles rp JOIN runs r ON r.id = rp.run_id"
+            " WHERE r.player_id = ? AND r.mode = ? AND rp.result = 'failed'"
+            " GROUP BY rp.puzzle_id",
+            (player_id, SURVIVAL),
+        ).fetchall()
+        practised = self._db.execute(
+            "SELECT rp.puzzle_id, rp.result FROM run_puzzles rp JOIN runs r ON r.id = rp.run_id"
+            " WHERE r.player_id = ? AND r.mode = ? ORDER BY r.id, rp.seq",
+            (player_id, PRACTICE),
+        ).fetchall()
+        last_practice = {row["puzzle_id"]: row["result"] for row in practised}
+        out = [
+            Mistake(
+                puzzle=Puzzle(
+                    row["puzzle_id"],
+                    row["fen"],
+                    tuple(row["moves"].split()),
+                    row["rating"],
+                    types=frozenset(json.loads(row["types_json"])),
+                ),
+                times_failed=int(row["times_failed"]),
+                last_failed_at=row["last_failed_at"],
+                last_practice=last_practice.get(row["puzzle_id"]),
+            )
+            for row in failed
+        ]
+        out.sort(key=lambda m: m.last_failed_at, reverse=True)
+        out.sort(key=lambda m: not m.still_wrong)  # stable: still-wrong first, newest first
+        return out
 
     def seen_puzzle_ids(self, player_id: int) -> set[str]:
         rows = self._db.execute(
@@ -457,6 +527,7 @@ def _to_run(row: sqlite3.Row) -> RunRecord:
         max_rating_solved=row["max_rating_solved"],
         total_ms=row["total_ms"],
         puzzles_played=row["puzzles_played"],
+        mode=row["mode"],
     )
 
 
