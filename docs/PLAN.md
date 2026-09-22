@@ -77,8 +77,8 @@ Outcome: the app is public and installable without Python.
 - [x] LICENSE (GPL-3.0-or-later, matching python-chess) and pyproject metadata
 - [x] PyInstaller spec, `build_release.bat`, `tools/make_icon.py`, frozen-build hint on Home
 - [x] `dist/chesspuz-<version>-windows.zip` built and smoke-tested
-- [ ] Public GitHub repository pushed (needs `gh auth login`)
-- [ ] GitHub release v0.1.0 with the zip attached
+- [x] Public GitHub repository pushed: https://github.com/CARTER-BNW/chesspuz
+- [x] GitHub release v0.1.0 with the zip attached
 Done when: a fresh machine can download the zip from the Releases page, run chesspuz.exe and rebuild the database from Settings.
 
 ## Decisions

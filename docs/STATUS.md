@@ -1,12 +1,12 @@
 # STATUS - chesspuz
 last_updated: 2026-09-23
-phase: 8 - Release (see docs/PLAN.md); everything else is done and play-tested through two feedback rounds
+phase: released 0.1.0 (https://github.com/CARTER-BNW/chesspuz); next is play-testing the release build and gathering feedback
 
 ## Next action
-- Publish: `gh auth login` (interactive, once), then `gh repo create chesspuz --public --source . --push` and `gh release create v0.1.0 dist/chesspuz-0.1.0-windows.zip --title "chesspuz 0.1.0"`. Rebuild the zip first with `build_release.bat` if the code changed.
+- Install the released zip on a machine without Python (or a fresh folder), run chesspuz.exe, rebuild the database from Settings and play a run; fix whatever the frozen build gets wrong. For the next version: bump `chesspuz.__version__` and pyproject, run `build_release.bat`, `git push`, then `gh release create vX.Y.Z dist/chesspuz-X.Y.Z-windows.zip`.
 
 ## Blockers
-- GitHub CLI is not logged in on this machine; the public repo and the release need that one interactive step.
+- none
 
 ## Puzzle database (built 2026-09-22)
 - `python main.py import --download`: 6,100,952 rows read, 4,269,438 passed the quality filter, 291,891 kept, 0 rejected, 12 min 10 s on this machine (300 MB download kept in %LOCALAPPDATA%/chesspuz)
