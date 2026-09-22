@@ -1,0 +1,26 @@
+# Normalise line endings: text files stored and checked out with LF (matches .editorconfig)
+* text=auto eol=lf
+
+# Windows scripts must stay CRLF
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Unix scripts must stay LF
+*.sh text eol=lf
+
+# Binaries
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.wav binary
+*.mp3 binary
+*.ogg binary
+*.ttf binary
+*.otf binary
+*.zip binary
+*.pdf binary
+*.exe binary
+*.dll binary

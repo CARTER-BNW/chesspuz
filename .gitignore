@@ -1,0 +1,30 @@
+# --- base ---
+# Claude Code personal files (never commit)
+CLAUDE.local.md
+.claude/settings.local.json
+
+# secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor noise
+Thumbs.db
+desktop.ini
+.DS_Store
+.vs/
+.vscode/
+*.swp
+
+# local scratch
+tmp/
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+.ruff_cache/
+build/
+dist/
+*.egg-info/
