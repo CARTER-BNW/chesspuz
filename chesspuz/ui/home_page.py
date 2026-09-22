@@ -24,6 +24,9 @@ DEFAULT_PLAYER = "Player"
 
 class HomePage(QWidget):
     start_requested = Signal(str, object)  # player name, list of types
+    leaderboard_requested = Signal()
+    stats_requested = Signal()
+    settings_requested = Signal()
 
     def __init__(self, ctx: AppContext, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -93,12 +96,26 @@ class HomePage(QWidget):
         card_layout.addWidget(self.start_button)
         card.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
 
+        nav = QHBoxLayout()
+        nav.addStretch()
+        for text, signal in (
+            ("Leaderboard", self.leaderboard_requested),
+            ("Stats", self.stats_requested),
+            ("Settings", self.settings_requested),
+        ):
+            button = QPushButton(text)
+            button.clicked.connect(signal.emit)
+            nav.addWidget(button)
+        nav.addStretch()
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(40, 30, 40, 30)
         layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addWidget(subtitle, alignment=Qt.AlignmentFlag.AlignHCenter)
         layout.addSpacing(16)
         layout.addWidget(card, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addSpacing(12)
+        layout.addLayout(nav)
         layout.addStretch()
         layout.addWidget(self.status_label, alignment=Qt.AlignmentFlag.AlignHCenter)
         self.refresh()

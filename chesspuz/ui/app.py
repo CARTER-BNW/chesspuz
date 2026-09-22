@@ -94,25 +94,42 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.stack)
 
         from chesspuz.ui.home_page import HomePage
+        from chesspuz.ui.leaderboard_page import LeaderboardPage
         from chesspuz.ui.review_page import ReviewPage
         from chesspuz.ui.run_page import RunPage
+        from chesspuz.ui.stats_page import StatsPage
 
         self.home = HomePage(ctx)
         self.run_page = RunPage(ctx, animation_ms=ctx.animation_ms())
         self.review = ReviewPage(ctx, animation_ms=ctx.animation_ms())
-        for page in (self.home, self.run_page, self.review):
+        self.leaderboard = LeaderboardPage(ctx)
+        self.stats = StatsPage(ctx)
+        for page in (self.home, self.run_page, self.review, self.leaderboard, self.stats):
             self.stack.addWidget(page)
 
         self.home.start_requested.connect(self.start_run)
+        self.home.leaderboard_requested.connect(self.show_leaderboard)
+        self.home.stats_requested.connect(self.show_stats)
         self.run_page.home_requested.connect(self.show_home)
         self.run_page.play_again_requested.connect(self.start_run)
         self.run_page.review_requested.connect(self.show_review)
         self.review.home_requested.connect(self.show_home)
+        self.leaderboard.home_requested.connect(self.show_home)
+        self.leaderboard.review_requested.connect(self.show_review)
+        self.stats.home_requested.connect(self.show_home)
         self.show_home()
 
     def show_home(self) -> None:
         self.home.refresh()
         self.stack.setCurrentWidget(self.home)
+
+    def show_leaderboard(self) -> None:
+        self.leaderboard.refresh()
+        self.stack.setCurrentWidget(self.leaderboard)
+
+    def show_stats(self) -> None:
+        self.stats.refresh()
+        self.stack.setCurrentWidget(self.stats)
 
     def show_review(self, run_id: int) -> None:
         record = self.ctx.users.run(run_id)

@@ -375,6 +375,47 @@ class UserDB:
         ).fetchall()
         return [_to_run(row) for row in rows]
 
+    def type_sets(self) -> list[tuple[str, ...]]:
+        """Distinct type selections used by scored runs, most used first."""
+        rows = self._db.execute(
+            "SELECT types_json, COUNT(*) AS n FROM runs"
+            f" WHERE status IN ({','.join('?' * len(SCORED_STATUSES))})"
+            " GROUP BY types_json ORDER BY n DESC, types_json",
+            SCORED_STATUSES,
+        ).fetchall()
+        return [tuple(json.loads(row["types_json"])) for row in rows]
+
+    def summary(self, player_id: int | None = None) -> dict[str, float]:
+        """Runs played, best and average score, puzzles attempted and solved."""
+        where = f"status IN ({','.join('?' * len(SCORED_STATUSES))})"
+        params: list[object] = list(SCORED_STATUSES)
+        if player_id is not None:
+            where += " AND player_id = ?"
+            params.append(player_id)
+        row = self._db.execute(
+            f"SELECT COUNT(*) AS runs, COALESCE(MAX(score), 0) AS best,"
+            f" COALESCE(AVG(score), 0) AS avg FROM runs WHERE {where}",
+            params,
+        ).fetchone()
+        puzzle_where = "1=1"
+        puzzle_params: list[object] = []
+        if player_id is not None:
+            puzzle_where = "r.player_id = ?"
+            puzzle_params.append(player_id)
+        puzzles = self._db.execute(
+            "SELECT COUNT(*) AS attempted,"
+            " COALESCE(SUM(rp.result = 'solved'), 0) AS solved"
+            f" FROM run_puzzles rp JOIN runs r ON r.id = rp.run_id WHERE {puzzle_where}",
+            puzzle_params,
+        ).fetchone()
+        return {
+            "runs": int(row["runs"]),
+            "best_score": int(row["best"]),
+            "average_score": float(row["avg"]),
+            "attempted": int(puzzles["attempted"]),
+            "solved": int(puzzles["solved"]),
+        }
+
     def seen_puzzle_ids(self, player_id: int) -> set[str]:
         rows = self._db.execute(
             "SELECT DISTINCT rp.puzzle_id FROM run_puzzles rp JOIN runs r ON r.id = rp.run_id"
