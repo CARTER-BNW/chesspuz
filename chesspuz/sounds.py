@@ -1,8 +1,9 @@
 """Synthesised sound effects and a tiny player. Headless; no Qt, no audio files.
 
-Clips are generated on first use as mono 16-bit WAV bytes and played through ``winsound`` on
-Windows (silently ignored elsewhere). The UI shares one :data:`player`; tests swap in a backend
-that just records what was played.
+Clips are generated on first use as mono 16-bit WAV bytes. On Windows they are written once to
+``<data dir>/sounds/<name>.wav`` and played with ``winsound`` asynchronously from that file
+(Python's winsound cannot play asynchronously from memory); elsewhere playback is a no-op. The UI
+shares one :data:`player`; tests swap in a backend that just records what was played.
 """
 
 from __future__ import annotations
@@ -10,13 +11,16 @@ from __future__ import annotations
 import io
 import math
 import random
+import sys
 import wave
 from collections.abc import Callable
+from pathlib import Path
 
 RATE = 22050
 NAMES = ("click", "move", "capture", "correct", "wrong")
 
-Backend = Callable[[bytes], None]
+#: ``backend(name, wav_bytes)`` plays one clip.
+Backend = Callable[[str, bytes], None]
 
 
 def _tone(
@@ -90,19 +94,33 @@ def clip(name: str) -> bytes:
     return _CLIPS[name]
 
 
-def _silent(_data: bytes) -> None:
+def _silent(_name: str, _data: bytes) -> None:
     return None
 
 
-def default_backend() -> Backend:
+def default_backend(directory: Path | None = None) -> Backend:
+    """winsound playing from WAV files under ``directory`` (default: the app data dir)."""
     try:
         import winsound
     except ImportError:
         return _silent
-    flags = winsound.SND_MEMORY | winsound.SND_ASYNC | winsound.SND_NODEFAULT
+    flags = winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT
+    ready: dict[str, Path] = {}
 
-    def play(data: bytes) -> None:
-        winsound.PlaySound(data, flags)
+    def play(name: str, data: bytes) -> None:
+        path = ready.get(name)
+        if path is None:
+            folder = directory
+            if folder is None:
+                from chesspuz import paths
+
+                folder = paths.data_dir() / "sounds"
+            folder.mkdir(parents=True, exist_ok=True)
+            path = folder / f"{name}.wav"
+            if not path.exists() or path.stat().st_size != len(data):
+                path.write_bytes(data)
+            ready[name] = path
+        winsound.PlaySound(str(path), flags)
 
     return play
 
@@ -111,14 +129,17 @@ class SoundPlayer:
     def __init__(self, backend: Backend | None = None, enabled: bool = True) -> None:
         self.backend = backend or default_backend()
         self.enabled = enabled
+        self._warned = False
 
     def play(self, name: str) -> None:
         if not self.enabled:
             return
         try:
-            self.backend(clip(name))
-        except Exception:  # noqa: BLE001 (a sound must never break the game)
-            pass
+            self.backend(name, clip(name))
+        except Exception as exc:  # noqa: BLE001 (a sound must never break the game)
+            if not self._warned:
+                self._warned = True
+                print(f"chesspuz: sound playback failed: {exc!r}", file=sys.stderr)
 
 
 #: Shared player used by the UI; the settings page toggles ``enabled``.

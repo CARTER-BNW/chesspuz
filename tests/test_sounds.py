@@ -1,4 +1,5 @@
 import io
+import sys
 import wave
 
 import pytest
@@ -24,25 +25,29 @@ def test_every_clip_is_a_short_mono_wav(name: str) -> None:
 
 
 def test_player_uses_its_backend_and_respects_enabled() -> None:
-    played: list[int] = []
-    player = sounds.SoundPlayer(backend=lambda data: played.append(len(data)))
+    played: list[tuple[str, int]] = []
+    player = sounds.SoundPlayer(backend=lambda name, data: played.append((name, len(data))))
     player.play("move")
-    assert played == [len(sounds.clip("move"))]
+    assert played == [("move", len(sounds.clip("move")))]
     player.enabled = False
     player.play("capture")
     assert len(played) == 1
 
 
-def test_player_swallows_backend_errors_and_unknown_names() -> None:
-    def broken(_data: bytes) -> None:
+def test_player_swallows_backend_errors_but_warns_once(capsys) -> None:
+    def broken(_name: str, _data: bytes) -> None:
         raise OSError("no audio device")
 
     player = sounds.SoundPlayer(backend=broken)
     player.play("wrong")  # no exception
     player.play("no-such-sound")  # KeyError swallowed too
+    assert capsys.readouterr().err.count("sound playback failed") == 1
 
 
-def test_default_backend_exists_and_is_callable() -> None:
-    backend = sounds.default_backend()
-    assert callable(backend)
+def test_default_backend_really_plays_without_raising(tmp_path) -> None:
+    backend = sounds.default_backend(tmp_path)
+    backend("click", sounds.clip("click"))  # must not raise (winsound on Windows, no-op elsewhere)
+    backend("click", sounds.clip("click"))
+    if sys.platform == "win32":
+        assert (tmp_path / "click.wav").read_bytes() == sounds.clip("click")
     assert isinstance(sounds.player, sounds.SoundPlayer)
