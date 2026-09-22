@@ -1,6 +1,13 @@
-"""Piece images: python-chess's bundled SVG set rendered to DPI-aware pixmaps, cached."""
+"""Piece images: python-chess's bundled SVG set rendered to DPI-aware pixmaps, cached.
+
+The cache can recolour the pieces: white pieces are drawn with ``#fff`` bodies and ``#000``
+outlines, black pieces with ``#000`` bodies and a few light details, so swapping those tokens per
+side gives a two-colour piece scheme without touching the outlines.
+"""
 
 from __future__ import annotations
+
+import re
 
 import chess
 import chess.svg
@@ -8,18 +15,51 @@ from PySide6.QtCore import QByteArray, QRectF, Qt
 from PySide6.QtGui import QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
+DEFAULT_WHITE = "#ffffff"
+DEFAULT_BLACK = "#000000"
+_WHITE_TOKENS = re.compile(r"#(?:ffffff|fff)(?![0-9a-fA-F])")
+_BLACK_TOKENS = re.compile(r"#(?:000000|000)(?![0-9a-fA-F])")
+
+
+def normalize_color(color: str, default: str) -> str:
+    """Lower-case ``#rrggbb`` or the default when the text is not a colour."""
+    text = (color or "").strip().lower()
+    if re.fullmatch(r"#[0-9a-f]{6}", text):
+        return text
+    if re.fullmatch(r"#[0-9a-f]{3}", text):
+        return "#" + "".join(ch * 2 for ch in text[1:])
+    return default
+
 
 class PieceCache:
     def __init__(self) -> None:
         self._renderers: dict[str, QSvgRenderer] = {}
         self._pixmaps: dict[tuple[str, int, float], QPixmap] = {}
+        self.white = DEFAULT_WHITE
+        self.black = DEFAULT_BLACK
+
+    def set_piece_colors(self, white: str, black: str) -> bool:
+        """Recolour the pieces; returns True when something changed (caches dropped)."""
+        white = normalize_color(white, DEFAULT_WHITE)
+        black = normalize_color(black, DEFAULT_BLACK)
+        if (white, black) == (self.white, self.black):
+            return False
+        self.white, self.black = white, black
+        self.clear()
+        self._renderers.clear()
+        return True
+
+    def svg(self, piece: chess.Piece) -> str:
+        text = chess.svg.piece(piece)
+        if piece.color == chess.WHITE:
+            return _WHITE_TOKENS.sub(self.white, text)
+        return _BLACK_TOKENS.sub(self.black, text)
 
     def renderer(self, piece: chess.Piece) -> QSvgRenderer:
         key = piece.symbol()
         renderer = self._renderers.get(key)
         if renderer is None:
-            svg = chess.svg.piece(piece)
-            renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+            renderer = QSvgRenderer(QByteArray(self.svg(piece).encode("utf-8")))
             self._renderers[key] = renderer
         return renderer
 
@@ -42,3 +82,7 @@ class PieceCache:
 
     def clear(self) -> None:
         self._pixmaps.clear()
+
+
+#: Every board shares this cache so a colour change reaches all of them at once.
+shared_pieces = PieceCache()

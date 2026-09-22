@@ -36,7 +36,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 from chesspuz import sounds
 from chesspuz.ui import theme
 from chesspuz.ui.annotations import Annotations, Brush, brush_for
-from chesspuz.ui.pieces import PieceCache
+from chesspuz.ui.pieces import PieceCache, shared_pieces
 
 PROMOTION_PIECES = (chess.QUEEN, chess.KNIGHT, chess.ROOK, chess.BISHOP)
 DRAG_THRESHOLD = 4  # pixels before a press becomes a drag
@@ -75,7 +75,9 @@ class BoardWidget(QWidget):
         self.board = chess.Board()
         self.orientation: chess.Color = chess.WHITE
         self.animation_ms = animation_ms
-        self.pieces = pieces or PieceCache()
+        self.pieces = pieces or shared_pieces
+        self.light_color = QColor(theme.SQUARE_LIGHT)
+        self.dark_color = QColor(theme.SQUARE_DARK)
         self.annotations = Annotations()
         self.last_move: chess.Move | None = None
         self.hint_move: chess.Move | None = None  # e.g. the engine's best move
@@ -154,6 +156,11 @@ class BoardWidget(QWidget):
 
     def set_orientation(self, color: chess.Color) -> None:
         self.orientation = color
+        self.update()
+
+    def set_colors(self, light: QColor | str, dark: QColor | str) -> None:
+        self.light_color = QColor(light)
+        self.dark_color = QColor(dark)
         self.update()
 
     def flip(self) -> None:
@@ -418,7 +425,7 @@ class BoardWidget(QWidget):
         for square in chess.SQUARES:
             light = (chess.square_file(square) + chess.square_rank(square)) % 2 == 1
             painter.fillRect(
-                self.square_rect(square), theme.SQUARE_LIGHT if light else theme.SQUARE_DARK
+                self.square_rect(square), self.light_color if light else self.dark_color
             )
         for highlight in self.annotations.highlights:
             painter.fillRect(
@@ -516,10 +523,9 @@ class BoardWidget(QWidget):
                 chess.RANK_NAMES[rank],
             )
 
-    @staticmethod
-    def _coordinate_color(square: chess.Square) -> QColor:
+    def _coordinate_color(self, square: chess.Square) -> QColor:
         light = (chess.square_file(square) + chess.square_rank(square)) % 2 == 1
-        return theme.SQUARE_DARK if light else theme.SQUARE_LIGHT
+        return self.dark_color if light else self.light_color
 
     def _draw_arrow(
         self, painter: QPainter, tail: chess.Square, head: chess.Square, color: QColor

@@ -68,30 +68,36 @@ def _wav(samples: list[float]) -> bytes:
     return buffer.getvalue()
 
 
-def _synth(name: str) -> bytes:
+def _synth(name: str) -> list[float]:
     if name == "click":
-        return _wav(_tone(1800, 30, volume=0.25, decay=40, noise=0.3))
+        return _tone(1800, 30, volume=0.25, decay=40, noise=0.3)
     if name == "move":
-        return _wav(_tone(170, 90, freq_end=120, volume=0.7, decay=18, noise=0.35))
+        return _tone(170, 90, freq_end=120, volume=0.7, decay=18, noise=0.35)
     if name == "capture":
-        return _wav(_tone(120, 150, freq_end=70, volume=0.9, decay=12, noise=0.6))
+        return _tone(120, 150, freq_end=70, volume=0.9, decay=12, noise=0.6)
     if name == "correct":
         first = _tone(660, 110, volume=0.35, decay=9, harmonics=(1.0, 0.2))
         second = _tone(880, 200, volume=0.35, decay=6, harmonics=(1.0, 0.2))
-        return _wav(first + second)
+        return first + second
     if name == "wrong":
-        return _wav(_tone(220, 280, freq_end=140, volume=0.45, decay=5, harmonics=(1.0, 0.5, 0.3)))
+        return _tone(220, 280, freq_end=140, volume=0.45, decay=5, harmonics=(1.0, 0.5, 0.3))
     raise KeyError(name)
 
 
-_CLIPS: dict[str, bytes] = {}
+_SAMPLES: dict[str, list[float]] = {}
+_CLIPS: dict[tuple[str, int], bytes] = {}
 
 
-def clip(name: str) -> bytes:
-    """WAV bytes for a named effect (cached; the bytes must outlive an async playback)."""
-    if name not in _CLIPS:
-        _CLIPS[name] = _synth(name)
-    return _CLIPS[name]
+def clip(name: str, volume: int = 100) -> bytes:
+    """WAV bytes for a named effect at ``volume`` 0-100 (cached per name and volume)."""
+    volume = max(0, min(100, int(volume)))
+    key = (name, volume)
+    if key not in _CLIPS:
+        if name not in _SAMPLES:
+            _SAMPLES[name] = _synth(name)
+        scale = volume / 100
+        _CLIPS[key] = _wav([sample * scale for sample in _SAMPLES[name]])
+    return _CLIPS[key]
 
 
 def _silent(_name: str, _data: bytes) -> None:
@@ -105,11 +111,11 @@ def default_backend(directory: Path | None = None) -> Backend:
     except ImportError:
         return _silent
     flags = winsound.SND_FILENAME | winsound.SND_ASYNC | winsound.SND_NODEFAULT
-    ready: dict[str, Path] = {}
+    written: dict[str, tuple[Path, bytes]] = {}
 
     def play(name: str, data: bytes) -> None:
-        path = ready.get(name)
-        if path is None:
+        entry = written.get(name)
+        if entry is None or entry[1] != data:  # first play, or the clip changed (volume)
             folder = directory
             if folder is None:
                 from chesspuz import paths
@@ -117,10 +123,11 @@ def default_backend(directory: Path | None = None) -> Backend:
                 folder = paths.data_dir() / "sounds"
             folder.mkdir(parents=True, exist_ok=True)
             path = folder / f"{name}.wav"
-            if not path.exists() or path.stat().st_size != len(data):
-                path.write_bytes(data)
-            ready[name] = path
-        winsound.PlaySound(str(path), flags)
+            winsound.PlaySound(None, 0)  # stop any playback of the old file before rewriting
+            path.write_bytes(data)
+            entry = (path, data)
+            written[name] = entry
+        winsound.PlaySound(str(entry[0]), flags)
 
     return play
 
@@ -129,13 +136,20 @@ class SoundPlayer:
     def __init__(self, backend: Backend | None = None, enabled: bool = True) -> None:
         self.backend = backend or default_backend()
         self.enabled = enabled
+        self.volumes: dict[str, int] = dict.fromkeys(NAMES, 100)
         self._warned = False
+
+    def set_volume(self, name: str, volume: int) -> None:
+        self.volumes[name] = max(0, min(100, int(volume)))
 
     def play(self, name: str) -> None:
         if not self.enabled:
             return
+        volume = self.volumes.get(name, 100)
+        if volume <= 0:
+            return
         try:
-            self.backend(name, clip(name))
+            self.backend(name, clip(name, volume))
         except Exception as exc:  # noqa: BLE001 (a sound must never break the game)
             if not self._warned:
                 self._warned = True

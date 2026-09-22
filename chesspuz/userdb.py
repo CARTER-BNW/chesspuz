@@ -147,6 +147,19 @@ class Mistake:
 
 
 @dataclass(frozen=True)
+class PlayedRecord:
+    """One attempt at a puzzle, with the run it belonged to."""
+
+    record: RunPuzzleRecord
+    played_at: str
+    mode: str
+
+    @property
+    def puzzle(self) -> Puzzle:
+        return self.record.puzzle
+
+
+@dataclass(frozen=True)
 class TypeStats:
     type: str
     attempts: int
@@ -485,6 +498,41 @@ class UserDB:
         out.sort(key=lambda m: m.last_failed_at, reverse=True)
         out.sort(key=lambda m: not m.still_wrong)  # stable: still-wrong first, newest first
         return out
+
+    def played_puzzles(self, player_id: int, limit: int = 500) -> list[PlayedRecord]:
+        """Every attempt by a player, newest first."""
+        rows = self._db.execute(
+            "SELECT rp.*, r.started_at AS played_at, r.mode AS mode"
+            " FROM run_puzzles rp JOIN runs r ON r.id = rp.run_id"
+            " WHERE r.player_id = ? ORDER BY r.id DESC, rp.seq DESC LIMIT ?",
+            (player_id, limit),
+        ).fetchall()
+        return [PlayedRecord(_to_run_puzzle(row), row["played_at"], row["mode"]) for row in rows]
+
+    def clear_runs(self, player_id: int | None = None) -> int:
+        """Delete every run (and its puzzles) of a player, or of everyone; returns runs removed."""
+        with self._db:
+            if player_id is None:
+                self._db.execute("DELETE FROM run_puzzles")
+                cursor = self._db.execute("DELETE FROM runs")
+            else:
+                self._db.execute(
+                    "DELETE FROM run_puzzles WHERE run_id IN"
+                    " (SELECT id FROM runs WHERE player_id = ?)",
+                    (player_id,),
+                )
+                cursor = self._db.execute("DELETE FROM runs WHERE player_id = ?", (player_id,))
+        return cursor.rowcount
+
+    def discard_run_if_empty(self, run_id: int) -> bool:
+        """Remove a run that recorded no puzzles (e.g. a puzzle window closed untouched)."""
+        with self._db:
+            cursor = self._db.execute(
+                "DELETE FROM runs WHERE id = ?"
+                " AND NOT EXISTS (SELECT 1 FROM run_puzzles WHERE run_id = ?)",
+                (run_id, run_id),
+            )
+        return cursor.rowcount > 0
 
     def seen_puzzle_ids(self, player_id: int) -> set[str]:
         rows = self._db.execute(
