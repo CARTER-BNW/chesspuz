@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 
 from chesspuz.review import PLAYED, SOLUTION, ReviewModel
 from chesspuz.ui.app import AppContext
+from chesspuz.ui.board import InputState
 from chesspuz.ui.review_page import ReviewPage
 from chesspuz.userdb import UserDB
 from tests import puzzles
@@ -116,6 +117,20 @@ def test_alternate_mate_keeps_both_lines(saved_run) -> None:
     assert model.index == 2
     model.prev_puzzle()
     assert model.index == 1
+
+
+def test_rapid_forward_steps_survive_a_running_animation(saved_run, tmp_path, qtbot) -> None:
+    db, run_id = saved_run
+    ctx = AppContext(tmp_path / "missing.sqlite", tmp_path / "user.sqlite")
+    page = ReviewPage(ctx, animation_ms=200)
+    qtbot.addWidget(page)
+    page.load(db.run(run_id), db.run_puzzles(run_id))
+    page._forward()
+    page._forward()  # arrives while the first move is still sliding
+    assert page.model.ply == 3
+    qtbot.waitUntil(lambda: page.board.state is not InputState.ANIMATING, timeout=2000)
+    assert page.board.board.fen() == page.model.board().fen()
+    ctx.close()
 
 
 def test_empty_model_is_harmless() -> None:

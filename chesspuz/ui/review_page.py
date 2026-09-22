@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from chesspuz.review import PLAYED, SOLUTION, ReviewModel
 from chesspuz.ui.app import AppContext
-from chesspuz.ui.board import BoardWidget
+from chesspuz.ui.board import BoardWidget, InputState
 from chesspuz.userdb import RunPuzzleRecord, RunRecord
 
 WRONG_COLOR = QColor("#e57373")
@@ -151,9 +151,14 @@ class ReviewPage(QWidget):
     def _refresh(self, animate: chess.Move | None = None) -> None:
         """Sync the board and side panel with the model; ``animate`` slides that move."""
         model = self.model
-        if animate is not None:
-            self.board.play_move(animate)
-        else:
+        animated = False
+        if animate is not None and self.board.state is not InputState.ANIMATING:
+            try:
+                self.board.play_move(animate)
+                animated = True
+            except ValueError:  # the widget's copy is out of step: fall through to a reset
+                animated = False
+        if not animated:
             self.board.set_orientation(model.orientation())
             self.board.set_position(model.board(), last_move=model.last_move())
         self.board.set_interactive(model.current is not None)
