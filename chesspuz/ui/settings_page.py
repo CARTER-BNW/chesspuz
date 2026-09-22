@@ -65,10 +65,13 @@ class SettingsPage(QWidget):
         self.animation_spin = self._spin(0, 600, 50)
         self.coordinates_box = QCheckBox("Show coordinates")
         self.coordinates_box.toggled.connect(self._save)
+        self.sounds_box = QCheckBox("Sounds (clicks, moves, captures, correct, wrong)")
+        self.sounds_box.toggled.connect(self._save)
         board = QGroupBox("Board")
         board_form = QFormLayout(board)
         board_form.addRow("Move animation (ms)", self.animation_spin)
         board_form.addRow("", self.coordinates_box)
+        board_form.addRow("", self.sounds_box)
 
         # engine
         self.engine_edit = QLineEdit()
@@ -158,6 +161,7 @@ class SettingsPage(QWidget):
         self.window_spin.setValue(self.ctx.int_setting("window", DEFAULTS["window"]))
         self.animation_spin.setValue(self.ctx.int_setting("animation_ms", DEFAULTS["animation_ms"]))
         self.coordinates_box.setChecked(self.ctx.setting("coordinates", "1") == "1")
+        self.sounds_box.setChecked(self.ctx.setting("sounds", "1") == "1")
         self.engine_edit.setText(self.ctx.setting("engine_path", ""))
         self.per_type_spin.setValue(self.ctx.int_setting("per_type", DEFAULTS["per_type"]))
         self._loading = False
@@ -172,6 +176,7 @@ class SettingsPage(QWidget):
         self.ctx.set_setting("window", str(self.window_spin.value()))
         self.ctx.set_setting("animation_ms", str(self.animation_spin.value()))
         self.ctx.set_setting("coordinates", "1" if self.coordinates_box.isChecked() else "0")
+        self.ctx.set_setting("sounds", "1" if self.sounds_box.isChecked() else "0")
         self.ctx.set_setting("engine_path", self.engine_edit.text().strip())
         self.ctx.set_setting("per_type", str(self.per_type_spin.value()))
         self._preview_ramp()
@@ -181,6 +186,7 @@ class SettingsPage(QWidget):
         for key, value in DEFAULTS.items():
             self.ctx.set_setting(key, str(value))
         self.ctx.set_setting("coordinates", "1")
+        self.ctx.set_setting("sounds", "1")
         self.refresh()
         self.changed.emit()
 

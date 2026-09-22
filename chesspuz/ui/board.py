@@ -33,6 +33,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
+from chesspuz import sounds
 from chesspuz.ui import theme
 from chesspuz.ui.annotations import Annotations, Brush, brush_for
 from chesspuz.ui.pieces import PieceCache
@@ -233,6 +234,7 @@ class BoardWidget(QWidget):
         self.update()
 
     def _apply(self, move: chess.Move) -> None:
+        sounds.player.play("capture" if self.board.is_capture(move) else "move")
         self.board.push(move)
         self.last_move = move
         self.hint_move = None
@@ -241,6 +243,7 @@ class BoardWidget(QWidget):
         self.update()
 
     def _select(self, square: chess.Square, pos: QPointF) -> None:
+        sounds.player.play("click")
         self._selected = square
         self._legal_targets = self._targets_for(square)
         self._press_pos = pos

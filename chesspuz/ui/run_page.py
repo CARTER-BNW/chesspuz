@@ -1,5 +1,7 @@
-"""Run page: plays a Survival run on the board and shows lives, score and feedback.
+"""Run page: plays a Survival run (or a practice session) on the board.
 
+A wrong move costs a life the first time but the puzzle stays on the board: the player may keep
+trying, press Show solution, or press Next. Solved puzzles move on by themselves after a moment.
 All timing goes through ``_later`` which stamps every callback with a generation number; leaving
 the page or starting the next puzzle bumps the generation, so stale timers never touch the board.
 """
@@ -23,6 +25,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from chesspuz import sounds
 from chesspuz.run import NoPuzzles, SurvivalRun
 from chesspuz.session import Outcome, PuzzleSession
 from chesspuz.ui.app import AppContext
@@ -31,15 +34,15 @@ from chesspuz.userdb import Player
 
 OPPONENT_DELAY_MS = 400
 REPLY_DELAY_MS = 150
-WRONG_HOLD_MS = 700
 PLAYBACK_STEP_MS = 450
-NEXT_PUZZLE_MS = 900
+NEXT_PUZZLE_MS = 1100
 
 
 class RunPage(QWidget):
     home_requested = Signal()
     play_again_requested = Signal(str, object)  # player name, types
     review_requested = Signal(int)  # run id
+    mistakes_requested = Signal()
     run_ended = Signal(int)  # run id
 
     def __init__(
@@ -57,8 +60,9 @@ class RunPage(QWidget):
         self.run_id: int | None = None
         self.player: Player | None = None
         self.session: PuzzleSession | None = None
+        self.total_puzzles: int | None = None  # practice queue length
         self._generation = 0
-        self._phase = "idle"  # idle | opponent | solving | playback | between | over
+        self._phase = "idle"  # idle | opponent | solving | reply | playback | done | over
         self._playback: list[chess.Move] = []
 
         self.board = BoardWidget(animation_ms=animation_ms)
@@ -84,7 +88,13 @@ class RunPage(QWidget):
         self.info_label.setObjectName("muted")
         self.info_label.setWordWrap(True)
         self.results = QListWidget()
-        self.results.setMaximumHeight(160)
+        self.results.setMaximumHeight(140)
+
+        self.solution_button = QPushButton("Show solution")
+        self.solution_button.clicked.connect(self._show_solution)
+        self.next_button = QPushButton("Next")
+        self.next_button.setObjectName("primary")
+        self.next_button.clicked.connect(self._next_clicked)
         self.clear_button = QPushButton("Clear arrows")
         self.clear_button.clicked.connect(self.board.clear_annotations)
         self.end_button = QPushButton("End run")
@@ -107,6 +117,10 @@ class RunPage(QWidget):
         side.addWidget(self.turn_label)
         side.addWidget(self.banner)
         side.addWidget(self.info_label)
+        actions = QHBoxLayout()
+        actions.addWidget(self.solution_button)
+        actions.addWidget(self.next_button)
+        side.addLayout(actions)
         side.addSpacing(8)
         side.addWidget(QLabel("This run"))
         side.addWidget(self.results)
@@ -120,19 +134,24 @@ class RunPage(QWidget):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.addWidget(self.board, 1)
         layout.addWidget(panel)
+        self._update_actions()
 
     # -- lifecycle -----------------------------------------------------------------------------
 
     def is_running(self) -> bool:
         return self.run is not None and not self.run.finished
 
-    def start(self, run_id: int, run: SurvivalRun, player: Player) -> None:
+    def start(
+        self, run_id: int, run: SurvivalRun, player: Player, total: int | None = None
+    ) -> None:
         self._generation += 1
         self.run_id, self.run, self.player = run_id, run, player
+        self.total_puzzles = total
         self.session = None
         self.results.clear()
         self.info_label.clear()
         self.board.clear_annotations()
+        self.end_button.setText("End practice" if run.practice else "End run")
         self._update_panel()
         self._next_puzzle()
 
@@ -144,6 +163,7 @@ class RunPage(QWidget):
             self.ctx.users.finish_run(self.run_id, self.run)
         self._phase = "over"
         self.board.set_interactive(False)
+        self._update_actions()
 
     # -- puzzle flow ---------------------------------------------------------------------------
 
@@ -169,6 +189,9 @@ class RunPage(QWidget):
             self.run.quit()
             self._game_over()
             return
+        if session is None:  # practice queue exhausted
+            self._game_over()
+            return
         self.session = session
         puzzle = session.puzzle
         self.board.set_interactive(False)
@@ -179,6 +202,7 @@ class RunPage(QWidget):
         self._set_banner("Watch the opponent's move...", "muted")
         self.info_label.clear()
         self._update_panel()
+        self._update_actions()
         opponent = chess.Move.from_uci(puzzle.opponent_move)
         self._later(OPPONENT_DELAY_MS, lambda: self.board.play_move(opponent))
 
@@ -195,11 +219,13 @@ class RunPage(QWidget):
         self.run.mark_started()
         side = "White" if self.session.solver == chess.WHITE else "Black"
         self._set_banner(f"{side} to move. Find the best move!", "normal")
+        self._update_actions()
 
     def _on_move_played(self, move: chess.Move) -> None:
         if self._phase != "solving" or self.run is None or self.session is None:
             return
         session = self.session
+        was_failed = session.failed
         outcome = self.run.try_move(move)
         if outcome is Outcome.CORRECT:
             self.board.play_move(move, animate=False)
@@ -212,27 +238,49 @@ class RunPage(QWidget):
         elif outcome is Outcome.COMPLETE:
             self.board.play_move(move, animate=False)
             self.board.set_interactive(False)
-            self._phase = "between"
-            self._set_banner("Solved!", "good")
-            self._show_result()
+            self._phase = "done"
+            sounds.player.play("correct")
+            if was_failed:
+                self._set_banner("Solved, after a mistake. No point this time.", "muted")
+            else:
+                self._set_banner("Solved!", "good")
+                self._show_result()
+            self._update_panel()
             self._later(NEXT_PUZZLE_MS, self._next_puzzle)
         elif outcome is Outcome.WRONG:
-            self.board.play_move(move, animate=False)  # show the mistake on the widget's copy
-            self.board.set_interactive(False)
-            self._phase = "wrong"
-            self._set_banner("Wrong. Here is the solution.", "bad")
-            self._show_result()
-            self._playback = session.remaining_solution()
-            self._later(WRONG_HOLD_MS, self._start_playback)
+            sounds.player.play("wrong")
+            if not was_failed:
+                self._show_result()
+            if self.run.finished and not self.run.practice:
+                text = "Wrong, and that was your last life. Keep trying or press Next."
+                self._set_banner(text, "bad")
+            else:
+                self._set_banner("Wrong. Try again, or show the solution.", "bad")
+            self._update_panel()
+        self._update_actions()
 
     def _play_reply(self, reply: chess.Move) -> None:
         self._phase = "solving"
         self.board.play_move(reply)
         self.board.set_interactive(True)
+        self._update_actions()
 
-    def _start_playback(self) -> None:
-        assert self.session is not None
-        self.board.set_position(self.session.board)
+    def _show_solution(self) -> None:
+        if self.run is None or self.session is None or self._phase != "solving":
+            return
+        session = self.session
+        was_failed = session.failed
+        moves = self.run.reveal_solution()
+        if not was_failed:
+            self._show_result()
+        self.board.set_interactive(False)
+        self.board.set_position(session.puzzle.initial_board())
+        self._set_banner("Here is the solution.", "muted")
+        self._update_panel()
+        self._update_actions()
+        # replay the whole line from the opponent's move so the idea is easy to follow
+        already = len(session.puzzle.moves) - len(moves)
+        self._playback = [*session.puzzle.line()[:already], *moves]
         self._phase = "playback"
         self._playback_step()
 
@@ -241,8 +289,17 @@ class RunPage(QWidget):
             move = self._playback.pop(0)
             self.board.play_move(move)
             return
-        self._phase = "between"
-        self._later(NEXT_PUZZLE_MS, self._next_puzzle)
+        self._phase = "done"
+        self._set_banner("Solution shown. Press Next when ready.", "muted")
+        self._update_actions()
+
+    def _next_clicked(self) -> None:
+        if self.run is None:
+            return
+        if self._phase in ("solving", "done", "playback") and self.run.settled:
+            self._generation += 1
+            self._playback = []
+            self._next_puzzle()
 
     def _show_result(self) -> None:
         assert self.run is not None and self.session is not None
@@ -252,18 +309,32 @@ class RunPage(QWidget):
         mark = "✓" if result.solved else "✗"
         self.info_label.setText(f"Puzzle rating {puzzle.rating}  ·  {types}")
         self.results.insertItem(0, f"{mark}  #{result.seq}  {puzzle.rating}  {types}")
-        self._update_panel()
 
     def _update_panel(self) -> None:
         if self.run is None:
             return
         run = self.run
-        hearts = "♥ " * run.lives_left + "♡ " * (run.lives - run.lives_left)
-        self.lives_label.setText(hearts.strip())
+        if run.practice:
+            self.lives_label.setText("Practice")
+            self.score_caption.setText("solved")
+            total = f" of {self.total_puzzles}" if self.total_puzzles else ""
+            self.puzzle_label.setText(f"Puzzle {len(run.results) + 1}{total}")
+            self.turn_label.setText("no lives, no score: just get it right")
+        else:
+            hearts = "♥ " * run.lives_left + "♡ " * (run.lives - run.lives_left)
+            self.lives_label.setText(hearts.strip())
+            self.score_caption.setText("score")
+            self.puzzle_label.setText(f"Puzzle {len(run.results) + 1}")
+            self.turn_label.setText(f"target rating ~{run.target_rating}")
         self.score_label.setText(str(run.score))
         self.streak_label.setText(f"streak {run.streak}  ·  best streak {run.best_streak}")
-        self.puzzle_label.setText(f"Puzzle {len(run.results) + 1}")
-        self.turn_label.setText(f"target rating ~{run.target_rating}")
+
+    def _update_actions(self) -> None:
+        run, session = self.run, self.session
+        solving = self._phase == "solving" and session is not None
+        self.solution_button.setEnabled(solving)
+        can_advance = run is not None and session is not None and run.settled
+        self.next_button.setEnabled(can_advance and self._phase in ("solving", "done", "playback"))
 
     def _set_banner(self, text: str, tone: str) -> None:
         colors = {"good": "#81c784", "bad": "#e57373", "muted": "#9aa0a6", "normal": "#e8eaed"}
@@ -276,10 +347,11 @@ class RunPage(QWidget):
         if self.run is None or not self.is_running():
             self.home_requested.emit()
             return
+        what = "practice" if self.run.practice else "run"
         answer = QMessageBox.question(
             self,
             "chesspuz",
-            "End this run now? Your score so far still counts.",
+            f"End this {what} now? Your results so far still count.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
         )
         if answer == QMessageBox.StandardButton.Yes:
@@ -296,7 +368,8 @@ class RunPage(QWidget):
         self.ctx.users.finish_run(self.run_id, self.run)
         best = self.ctx.users.best_score(self.player.id, self.run.types)
         self._update_panel()
-        self._set_banner("Run over", "bad" if self.run.ended_by == "lives" else "muted")
+        self._update_actions()
+        self._set_banner("Practice over" if self.run.practice else "Run over", "muted")
         self.run_ended.emit(self.run_id)
         dialog = GameOverDialog(self, self.run, best)
         choice = dialog.exec()
@@ -304,37 +377,50 @@ class RunPage(QWidget):
             self.play_again_requested.emit(self.player.name, list(self.run.types))
         elif choice == GameOverDialog.REVIEW:
             self.review_requested.emit(self.run_id)
+        elif choice == GameOverDialog.MISTAKES:
+            self.mistakes_requested.emit()
         else:
             self.home_requested.emit()
 
 
 class GameOverDialog(QDialog):
+    MISTAKES = 4
     REVIEW = 3
     PLAY_AGAIN = 2
     HOME = 1
 
     def __init__(self, parent: QWidget, run: SurvivalRun, best: int) -> None:
         super().__init__(parent)
-        self.setWindowTitle("Run over")
         self.setModal(True)
-        headline = QLabel("Out of lives!" if run.ended_by == "lives" else "Run ended")
+        if run.practice:
+            self.setWindowTitle("Practice over")
+            headline = QLabel("Practice done")
+            score = QLabel(f"{run.score} of {len(run.results)} solved cleanly")
+            details = QLabel("Puzzles you got wrong stay on the Mistakes list.")
+        else:
+            self.setWindowTitle("Run over")
+            headline = QLabel("Out of lives!" if run.ended_by == "lives" else "Run ended")
+            score = QLabel(f"Score {run.score}")
+            details = QLabel(
+                f"Best with these types: {best}\n"
+                f"Highest rating solved: {run.max_rating_solved or '-'}\n"
+                f"Best streak: {run.best_streak}"
+            )
         headline.setObjectName("title")
-        score = QLabel(f"Score {run.score}")
         score.setStyleSheet("font-size: 32px; font-weight: bold;")
-        details = QLabel(
-            f"Best with these types: {best}\n"
-            f"Highest rating solved: {run.max_rating_solved or '-'}\n"
-            f"Best streak: {run.best_streak}"
-        )
         details.setObjectName("muted")
         buttons = QDialogButtonBox()
-        review = buttons.addButton("Review run", QDialogButtonBox.ButtonRole.ActionRole)
-        again = buttons.addButton("Play again", QDialogButtonBox.ButtonRole.AcceptRole)
-        home = buttons.addButton("Home", QDialogButtonBox.ButtonRole.RejectRole)
-        again.setObjectName("primary")
+        review = buttons.addButton("Review", QDialogButtonBox.ButtonRole.ActionRole)
         review.setEnabled(bool(run.results))
         review.clicked.connect(lambda: self.done(self.REVIEW))
-        again.clicked.connect(lambda: self.done(self.PLAY_AGAIN))
+        if run.practice:
+            mistakes = buttons.addButton("Mistakes", QDialogButtonBox.ButtonRole.ActionRole)
+            mistakes.clicked.connect(lambda: self.done(self.MISTAKES))
+        else:
+            again = buttons.addButton("Play again", QDialogButtonBox.ButtonRole.AcceptRole)
+            again.setObjectName("primary")
+            again.clicked.connect(lambda: self.done(self.PLAY_AGAIN))
+        home = buttons.addButton("Home", QDialogButtonBox.ButtonRole.RejectRole)
         home.clicked.connect(lambda: self.done(self.HOME))
         layout = QVBoxLayout(self)
         layout.addWidget(headline, alignment=Qt.AlignmentFlag.AlignHCenter)

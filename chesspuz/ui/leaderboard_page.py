@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -22,6 +23,7 @@ from chesspuz.ui.app import AppContext
 from chesspuz.userdb import RunRecord
 
 RUN_ID_ROLE = Qt.ItemDataRole.UserRole
+WRONG_ROLE_COLOR = QColor("#e57373")
 ALL_PLAYERS = "All players"
 ANY_TYPES = "Any type selection"
 

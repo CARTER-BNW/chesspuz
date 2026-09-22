@@ -7,10 +7,17 @@ import sys
 from collections.abc import Collection
 from pathlib import Path
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QApplication, QMainWindow, QMessageBox, QStackedWidget
+from PySide6.QtCore import QEvent, QObject, Qt
+from PySide6.QtWidgets import (
+    QAbstractButton,
+    QApplication,
+    QMainWindow,
+    QMessageBox,
+    QStackedWidget,
+)
 
-from chesspuz import paths, themes
+from chesspuz import paths, sounds, themes
+from chesspuz.puzzle import Puzzle
 from chesspuz.puzzledb import PuzzleRepository
 from chesspuz.run import RampSettings
 from chesspuz.userdb import UserDB
@@ -95,6 +102,7 @@ class MainWindow(QMainWindow):
 
         from chesspuz.ui.home_page import HomePage
         from chesspuz.ui.leaderboard_page import LeaderboardPage
+        from chesspuz.ui.mistakes_page import MistakesPage
         from chesspuz.ui.review_page import ReviewPage
         from chesspuz.ui.run_page import RunPage
         from chesspuz.ui.settings_page import SettingsPage
@@ -106,6 +114,7 @@ class MainWindow(QMainWindow):
         self.leaderboard = LeaderboardPage(ctx)
         self.stats = StatsPage(ctx)
         self.settings = SettingsPage(ctx)
+        self.mistakes = MistakesPage(ctx)
         self.pages = (
             self.home,
             self.run_page,
@@ -113,6 +122,7 @@ class MainWindow(QMainWindow):
             self.leaderboard,
             self.stats,
             self.settings,
+            self.mistakes,
         )
         for page in self.pages:
             self.stack.addWidget(page)
@@ -128,6 +138,13 @@ class MainWindow(QMainWindow):
         self.leaderboard.review_requested.connect(self.show_review)
         self.stats.home_requested.connect(self.show_home)
         self.home.settings_requested.connect(self.show_settings)
+        self.home.mistakes_requested.connect(self.show_mistakes)
+        self.mistakes.home_requested.connect(self.show_home)
+        self.mistakes.practice_requested.connect(self.start_practice)
+        self.run_page.mistakes_requested.connect(self.show_mistakes)
+        app = QApplication.instance()
+        if app is not None:
+            app.installEventFilter(self)
         self.settings.home_requested.connect(self.show_home)
         self.settings.changed.connect(self.apply_settings)
         self.settings.database_changed.connect(self.home.refresh)
@@ -144,6 +161,24 @@ class MainWindow(QMainWindow):
             board.show_coordinates = coordinates
             board.update()
         self.review.set_engine(self.ctx.setting("engine_path", ""))
+        sounds.player.enabled = self.ctx.setting("sounds", "1") == "1"
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 (Qt override)
+        if event.type() == QEvent.Type.MouseButtonPress and isinstance(watched, QAbstractButton):
+            sounds.player.play("click")
+        return super().eventFilter(watched, event)
+
+    def show_mistakes(self) -> None:
+        self.mistakes.refresh()
+        self.stack.setCurrentWidget(self.mistakes)
+
+    def start_practice(self, player_name: str, puzzles: list[Puzzle]) -> None:
+        if not puzzles:
+            return
+        player = self.ctx.users.get_or_create_player(player_name)
+        run_id, run = self.ctx.users.new_practice(player.id, puzzles)
+        self.stack.setCurrentWidget(self.run_page)
+        self.run_page.start(run_id, run, player, total=len(puzzles))
 
     def restore_geometry(self) -> None:
         stored = self.ctx.setting("geometry", "")

@@ -25,6 +25,7 @@ DEFAULT_PLAYER = "Player"
 class HomePage(QWidget):
     start_requested = Signal(str, object)  # player name, list of types
     leaderboard_requested = Signal()
+    mistakes_requested = Signal()
     stats_requested = Signal()
     settings_requested = Signal()
 
@@ -100,6 +101,7 @@ class HomePage(QWidget):
         nav.addStretch()
         for text, signal in (
             ("Leaderboard", self.leaderboard_requested),
+            ("Mistakes", self.mistakes_requested),
             ("Stats", self.stats_requested),
             ("Settings", self.settings_requested),
         ):

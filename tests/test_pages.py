@@ -63,9 +63,7 @@ def test_a_whole_run_plays_through_the_run_page(ctx: AppContext, qtbot, monkeypa
         page.start(run_id, run, player)
         solved = 0
         for _ in range(20):
-            qtbot.waitUntil(lambda: page.board.interactive or run.finished, timeout=2000)
-            if run.finished:
-                break
+            qtbot.waitUntil(lambda: page.board.state is InputState.IDLE, timeout=2000)
             session = page.session
             assert session is not None
             wrong = solved >= 2  # solve two, then throw three lives away
@@ -73,7 +71,12 @@ def test_a_whole_run_plays_through_the_run_page(ctx: AppContext, qtbot, monkeypa
             if wrong and move not in page.board.board.legal_moves:
                 move = next(m for m in page.board.board.legal_moves if m != session.expected)
             page.board.move_played.emit(move)
-            if not wrong:
+            if wrong:
+                assert page.next_button.isEnabled()
+                page.next_button.click()  # no auto-advance after a mistake
+                if run.finished:
+                    break
+            else:
                 solved += 1
     assert run.finished and run.ended_by == "lives"
     assert ended == [run_id]
