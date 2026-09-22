@@ -1,6 +1,6 @@
 # STATUS - chesspuz
-last_updated: 2026-09-22
-phase: 7 done - all planned phases complete (see docs/PLAN.md); next is play-testing and polish
+last_updated: 2026-09-23
+phase: play-testing and polish (all planned phases done; feedback round 1 shipped)
 
 ## Next action
 - Play a few real Survival runs with `python main.py`, note anything that feels off (ramp speed, animation, layout), then decide the first polish items. Optional: download Stockfish and set its path in Settings to get evaluations in Review.
@@ -14,7 +14,8 @@ phase: 7 done - all planned phases complete (see docs/PLAN.md); next is play-tes
 - Scholar's Mate was exempt from the cap in that build; the code now only exempts Under Promotion. Rebuilding from Settings (or `python main.py import --download`) is optional and only trims Scholar's Mate a little.
 
 ## Last session
-- Done: Phases 0-7. Plan and spec; pure game logic; Lichess importer + repository + CLI; user database with crash-safe runs; board widget (animation, promotion chooser, annotations, engine hint arrow); Home, Run, Review, Leaderboard/History, Stats and Settings pages; in-app database rebuild; optional Stockfish analysis in Review. 113 tests, ruff clean.
+- Done (2026-09-23, feedback round 1): keep trying after a mistake with Show solution and Next; the last puzzle stays open after the third life; Mistakes page with practice sessions (runs with mode=practice, schema v2 migration); synthesised click/move/capture/correct/wrong sounds via winsound with a Sounds setting. 132 tests.
+- Done (2026-09-22): Phases 0-7. Plan and spec; pure game logic; Lichess importer + repository + CLI; user database with crash-safe runs; board widget (animation, promotion chooser, annotations, engine hint arrow); Home, Run, Review, Leaderboard/History, Stats and Settings pages; in-app database rebuild; optional Stockfish analysis in Review. 113 tests, ruff clean.
 - Bugs found by screenshot scripts and fixed: rapid navigation during an animation; set_interactive() cancelling the opponent's reply animation.
 - Failed / dead ends (do not retry): Bash tool truncates commands over ~8 KB (use the Write tool for big files); pytest-qt `mouseMove` is unreliable offscreen, tests send QMouseEvents directly; a shell pipeline hides pytest's exit code, check PIPESTATUS before committing.
 

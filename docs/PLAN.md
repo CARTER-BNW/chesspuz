@@ -82,3 +82,7 @@ Done when: leaderboard filters by type set, settings change the next run, GUI im
 - 2026-09-22: no visible clock in Survival - the user asked for no time pressure; solve times are recorded only for leaderboard tie-breaks
 - 2026-09-22: Stockfish analysis is optional and last - the app must be complete without an external binary
 - 2026-09-22: Stockfish is configured by path in Settings and only used in Review - keeps the download and licence separate from the app; a fake UCI engine covers the tests
+- 2026-09-23: a wrong move costs one life per puzzle but the puzzle stays open (keep trying, Show solution, Next) - the user wants to learn, not be shown the answer; solving after a mistake scores nothing so Survival stays honest
+- 2026-09-23: practice sessions are runs with mode=practice - Review and History work unchanged, leaderboards ignore them
+- 2026-09-23: sounds are synthesised in code and played with winsound - no audio assets, no QtMultimedia (not in PySide6-Essentials)
+
