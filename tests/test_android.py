@@ -156,6 +156,25 @@ def test_back_key_steps_back_instead_of_quitting(ctx: AppContext, qtbot) -> None
     assert window.stack.currentWidget() is window.home
 
 
+def test_phone_pages_are_portrait_before_the_window_is_shown(
+    ctx: AppContext,  # noqa: F811
+    qtbot,
+    monkeypatch,
+) -> None:
+    """Android sizes the window to the screen; the pages' desktop minimum must not clamp it."""
+    from PySide6.QtCore import QSize
+
+    monkeypatch.setattr(device, "MOBILE", True)
+    monkeypatch.setattr(responsive, "_screen_size", lambda _widget: QSize(*PHONE))
+    window = MainWindow(ctx)
+    qtbot.addWidget(window)
+    assert not window.isVisible()
+    assert window.run_page.shape.portrait
+    assert window.review.shape.portrait
+    assert window.minimumSizeHint().width() <= PHONE[0]
+    assert window.home.type_columns() < 3
+
+
 # -- the phone entry point and the build tooling -------------------------------------------------
 
 

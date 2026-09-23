@@ -65,9 +65,31 @@ if [ ! -f buildozer.spec ] || [ ! -d deployment/recipes/PySide6 ]; then
         exit 3
     fi
 fi
+# python-for-android: our own checkout at the pinned commit (buildozer would `git reset --hard`
+# its own clone every build and undo the Java patch below)
+P4A_SRC="$HOME/p4a-chesspuz"
+P4A_PIN=$(tr -d '\r\n' < "$WORK/wsl/p4a_pin.txt")
+P4A_URL="https://github.com/kivy/python-for-android"
+if [ ! -d "$P4A_SRC/.git" ]; then
+    echo "== cloning python-for-android into $P4A_SRC =="
+    git clone -q "$P4A_URL" "$P4A_SRC"
+fi
+if [ "$(git -C "$P4A_SRC" rev-parse HEAD)" != "$P4A_PIN" ]; then
+    git -C "$P4A_SRC" fetch -q origin
+    git -C "$P4A_SRC" checkout -q "$P4A_PIN"
+fi
+# the Back key must reach Qt every time (see wsl/patch_java.py): the bootstrap template, and the
+# copies python-for-android already made for this project
+BUILD_DIR="$WORK/app/.buildozer/android/platform/build-arm64-v8a"
+JAVA_REL="src/main/java/org/kivy/android/PythonActivity.java"
+python "$WORK/wsl/patch_java.py" \
+    "$P4A_SRC/pythonforandroid/bootstraps/qt/build/$JAVA_REL" \
+    "$BUILD_DIR/build/bootstrap_builds/qt/$JAVA_REL" \
+    "$BUILD_DIR/dists/chesspuz/$JAVA_REL"
 python "$WORK/wsl/patch_spec.py" buildozer.spec \
     --version "$(tr -d '\r\n' < "$WORK/VERSION")" \
-    --p4a-commit "$(tr -d '\r\n' < "$WORK/wsl/p4a_pin.txt")" \
+    --p4a-commit "$P4A_PIN" \
+    --p4a-source-dir "$P4A_SRC" \
     --bin-dir "$WORK/bin"
 echo "== buildozer.spec (effective, uncommented lines) =="
 grep -v -E '^\s*(#|$)' buildozer.spec

@@ -59,7 +59,13 @@ def main(argv: list[str] | None = None) -> int:
 
         private = paths.data_dir().parent / "chesspuz-phone"
     where = prepare_environment(private, app_dir)
-    faulthandler.enable()
+    try:
+        # python-for-android's stderr is a logcat writer without a file descriptor, so the
+        # fault handler writes to its own file next to the user database
+        fault_log = open(where["data"] / "faults.log", "w")  # noqa: SIM115 (kept open on purpose)
+        faulthandler.enable(file=fault_log)
+    except Exception as exc:  # noqa: BLE001 (diagnostics only)
+        print(f"chesspuz: no fault handler ({exc!r})", flush=True)
     print(f"chesspuz {_build_info()} starting; data in {where['data']}", flush=True)
     try:
         from chesspuz.ui import app as ui_app

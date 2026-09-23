@@ -20,7 +20,7 @@ from chesspuz import paths, sounds, themes
 from chesspuz.puzzle import Puzzle
 from chesspuz.puzzledb import PuzzleRepository
 from chesspuz.run import RampSettings
-from chesspuz.ui import theme
+from chesspuz.ui import responsive, theme
 from chesspuz.ui.pieces import shared_pieces
 from chesspuz.userdb import UserDB
 
@@ -167,6 +167,15 @@ class MainWindow(QMainWindow):
         self.apply_settings()
         self.restore_geometry()
         self.show_home()
+        self.reshape()  # on a phone: portrait before Android sizes the window
+        responsive.enable_touch_scrolling(self)
+
+    def reshape(self) -> None:
+        """Re-lay out every page for the current window (or, before showing, screen) size."""
+        for page in self.pages:  # hidden pages get no resize of their own
+            relayout = getattr(getattr(page, "shape", page), "relayout", None)
+            if relayout is not None:
+                relayout()
 
     def apply_settings(self) -> None:
         """Push live-changeable settings into the pages and open puzzle windows."""
@@ -234,10 +243,7 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         super().resizeEvent(event)
-        for page in self.pages:  # hidden pages get no resize of their own
-            shape = getattr(page, "shape", None)
-            if shape is not None:
-                shape.relayout()
+        self.reshape()
 
     def keyPressEvent(self, event) -> None:  # noqa: N802 (Qt override)
         if event.key() == Qt.Key.Key_Back:  # the phone's Back key: never quits, steps back

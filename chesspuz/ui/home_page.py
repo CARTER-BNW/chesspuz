@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 from chesspuz import themes
 from chesspuz.ui import device
 from chesspuz.ui.app import AppContext
-from chesspuz.ui.responsive import is_compact, make_scroll, reflow_grid
+from chesspuz.ui.responsive import is_compact, make_scroll, reflow_grid, shape_size
 
 DEFAULT_PLAYER = "Player"
 MAX_TYPE_COLUMNS = 3
@@ -136,22 +136,22 @@ class HomePage(QWidget):
         outer.setContentsMargins(0, 0, 0, 0)
         outer.addWidget(make_scroll(content))
         self._placed: tuple[int, int] | None = None
-        self._reflow()
+        self.relayout()
         self.refresh()
 
     # -- shape ---------------------------------------------------------------------------------
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 (Qt override)
         super().resizeEvent(event)
-        self._reflow()
+        self.relayout()
 
-    def _reflow(self) -> None:
+    def relayout(self) -> None:
         """Fit the type grid and the navigation buttons to the width (1-3 columns)."""
         compact = is_compact(self)
         margin = 16 if compact else 40
         self.page_layout.setContentsMargins(margin, 20 if compact else 30, margin, 20)
         widest = max(box.sizeHint().width() for box in self.type_boxes.values())
-        available = max(200, self.width() - 2 * margin - 48)
+        available = max(200, shape_size(self).width() - 2 * margin - 48)
         columns = max(1, min(MAX_TYPE_COLUMNS, available // (widest + 24)))
         nav_columns = len(self.nav_buttons) if not compact else 3
         if (columns, nav_columns) != self._placed:
@@ -196,7 +196,7 @@ class HomePage(QWidget):
         else:
             self.status_label.setText(f"{self.ctx.puzzles.count():,} puzzles loaded")
         self._selection_changed()
-        self._reflow()
+        self.relayout()
 
     def player_name(self) -> str:
         return self.player_box.currentText().strip()

@@ -12,25 +12,66 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 
-from PySide6.QtCore import QEvent, QObject, Qt
-from PySide6.QtWidgets import QBoxLayout, QFrame, QGridLayout, QScrollArea, QWidget
+from PySide6.QtCore import QEvent, QObject, QSize, Qt
+from PySide6.QtWidgets import (
+    QAbstractScrollArea,
+    QApplication,
+    QBoxLayout,
+    QFrame,
+    QGridLayout,
+    QScrollArea,
+    QScroller,
+    QWidget,
+)
+
+from chesspuz.ui import device
 
 QWIDGETSIZE_MAX = 16777215  # Qt's "no maximum"
 COMPACT_WIDTH = 600  # narrower than this: phone-style spacing and stacking
 
 
-def _reference(widget: QWidget) -> QWidget:
-    """The widget whose size decides the shape: its window (a stacked page fills it)."""
-    return widget.window() or widget
+def _screen_size(widget: QWidget) -> QSize | None:
+    screen = widget.screen() or QApplication.primaryScreen()
+    return screen.availableGeometry().size() if screen is not None else None
+
+
+def shape_size(widget: QWidget) -> QSize:
+    """The size the shape is decided from: the widget's window (a stacked page fills it).
+
+    On a phone the window is the screen, so before the window is shown the screen's size is
+    used: the pages must already be in portrait shape when Android sizes the window, or their
+    desktop minimum width (board plus side panel) clamps the window wider than the screen.
+    """
+    ref = widget.window() or widget
+    if device.MOBILE and not ref.isVisible():
+        size = _screen_size(ref)
+        if size is not None and size.isValid():
+            return size
+    return ref.size()
 
 
 def is_portrait(widget: QWidget) -> bool:
-    ref = _reference(widget)
-    return ref.height() > ref.width()
+    size = shape_size(widget)
+    return size.height() > size.width()
 
 
 def is_compact(widget: QWidget) -> bool:
-    return _reference(widget).width() < COMPACT_WIDTH
+    return shape_size(widget).width() < COMPACT_WIDTH
+
+
+def enable_touch_scrolling(root: QWidget) -> None:
+    """Finger drags scroll every scroll area, table and list under ``root`` (kinetic).
+
+    Qt Widgets only scroll with the scrollbar or the wheel by themselves; a touch gesture
+    changes nothing for a mouse, so this is safe on the desktop too.
+    """
+    views = root.findChildren(QAbstractScrollArea)
+    if isinstance(root, QAbstractScrollArea):
+        views.append(root)
+    for view in views:
+        QScroller.grabGesture(view.viewport(), QScroller.ScrollerGestureType.TouchGesture)
+        if device.MOBILE:  # a finger scrolls; the bar only takes room on a phone
+            view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
 
 
 def make_scroll(content: QWidget) -> QScrollArea:
@@ -42,6 +83,7 @@ def make_scroll(content: QWidget) -> QScrollArea:
     scroll.viewport().setAutoFillBackground(False)
     scroll.setStyleSheet("QScrollArea { background: transparent; }")
     scroll.setWidget(content)
+    enable_touch_scrolling(scroll)
     return scroll
 
 
@@ -142,9 +184,9 @@ class BoardPanelLayout(QObject):
             self._apply(portrait)
         if portrait:
             # a square board as wide as the window; the panel takes what is left and scrolls
-            ref = _reference(self.host)
-            side = max(120, ref.width() - 2 * self.margin)
-            side = min(side, max(120, ref.height() - 2 * self.margin - 160))
+            size = shape_size(self.host)
+            side = max(120, size.width() - 2 * self.margin)
+            side = min(side, max(120, size.height() - 2 * self.margin - 160))
             self.board.setFixedHeight(side)
 
     def _apply(self, portrait: bool) -> None:

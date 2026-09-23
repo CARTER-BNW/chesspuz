@@ -64,9 +64,10 @@ INTERESTING = re.compile(
     r"building |downloading|unpacking|installing|need |not found|stderr|"
     r"^\[|^== |compiling|distribution|bootstrap|recipe"
 )
+# logcat -v time lines from the app itself: "09-23 12:48:35.216 I/python  (10768): ..."
 LOG_PATTERN = re.compile(
-    r"(?i)python|chesspuz|PythonActivity|\bQt\b|libc |AndroidRuntime|DEBUG|FATAL|"
-    r"Traceback|Error|qt\.|QtCore|QtGui|QtWidgets"
+    r"^\S+ \S+ [A-Z]/(python|PythonActivity|Qt\w*|qt\.[\w.]*|AndroidRuntime|DEBUG|libc)\s*\("
+    r"|Traceback|^\S+ \S+ [A-Z]/\S+\s*\(\s*\d+\):\s+File \""
 )
 
 

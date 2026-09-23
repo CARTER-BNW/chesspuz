@@ -51,6 +51,7 @@ def main() -> int:
     parser.add_argument("spec", type=Path)
     parser.add_argument("--version", required=True)
     parser.add_argument("--p4a-commit", required=True)
+    parser.add_argument("--p4a-source-dir", default="")
     parser.add_argument("--bin-dir", required=True)
     args = parser.parse_args()
     text = args.spec.read_text(encoding="utf-8")
@@ -98,6 +99,9 @@ def main() -> int:
         "p4a.branch": "develop",
         "p4a.commit": args.p4a_commit,
     }
+    if args.p4a_source_dir:
+        # our own checkout (patched Back key); buildozer then does no git operations at all
+        app["p4a.source_dir"] = args.p4a_source_dir
     for key, value in app.items():
         text = set_key(text, "app", key, value)
     for key, value in {

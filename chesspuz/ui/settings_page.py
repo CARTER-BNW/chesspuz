@@ -254,7 +254,7 @@ class SettingsPage(QWidget):
         self.page_layout.setContentsMargins(24, 20, 24, 20)
         self.page_layout.addWidget(make_scroll(content))
         self._compact: bool | None = None
-        self._reflow()
+        self.relayout()
         self.refresh()
 
     def _spin(self, lo: int, hi: int, step: int) -> QSpinBox:
@@ -277,9 +277,9 @@ class SettingsPage(QWidget):
 
     def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 (Qt override)
         super().resizeEvent(event)
-        self._reflow()
+        self.relayout()
 
-    def _reflow(self) -> None:
+    def relayout(self) -> None:
         compact = is_compact(self)
         if compact == self._compact:
             return
