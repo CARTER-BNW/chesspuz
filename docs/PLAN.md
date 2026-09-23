@@ -102,7 +102,9 @@ Outcome: John's next change list, on desktop and phone. Spec: docs/specs/lives-a
 - [x] Pause while solving: clock frozen (headless `pause`/`resume`), opaque full-page overlay with Resume, Back resumes on the phone
 - [x] Leaderboard and Stats per number of lives: a run with more lives counts on the boards for fewer lives with its score at that many mistakes
 - [x] Tests (tests/test_round3.py), offscreen screenshots at 412x915 and 1100x760, version 0.3.0
-- [x] Release 0.3.0 on GitHub: Windows zip + APK (2026-09-23)
+- [x] Release 0.3.0 on GitHub: Windows zip + APK + README PDF (2026-09-23)
+- [x] Support the Dev (buymeacoffee.com/carter.bnw) and Check for Updates (Releases page) buttons above the home menu; version 0.3.1 built (2026-09-23)
+- [ ] Release 0.3.1 on GitHub (artifacts built, waiting for John's go)
 - [ ] APK installed on the phone (John, from the Releases page; or `python android\sync.py install run` on USB)
 Done when: the changes are on the phone and in a GitHub release.
 
