@@ -30,9 +30,10 @@ from PySide6.QtWidgets import (
 from chesspuz import sounds
 from chesspuz.run import NoPuzzles, SurvivalRun
 from chesspuz.session import Outcome, PuzzleSession
-from chesspuz.ui import theme
+from chesspuz.ui import device, theme
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.board import BoardWidget
+from chesspuz.ui.responsive import BoardPanelLayout
 from chesspuz.userdb import Player
 
 OPPONENT_DELAY_MS = 400
@@ -119,6 +120,7 @@ class RunPage(QWidget):
         self.next_button.clicked.connect(self._next_clicked)
         self.clear_button = QPushButton("Clear arrows")
         self.clear_button.clicked.connect(self.board.clear_annotations)
+        self.clear_button.setVisible(not device.MOBILE)  # no right button on a touch screen
         self.end_button = QPushButton("End run")
         self.end_button.clicked.connect(self._end_run_clicked)
 
@@ -129,7 +131,6 @@ class RunPage(QWidget):
 
         panel = QFrame()
         panel.setFrameShape(QFrame.Shape.StyledPanel)
-        panel.setFixedWidth(300)
         side = QVBoxLayout(panel)
         side.addWidget(self.lives_label)
         side.addLayout(score_row)
@@ -158,10 +159,8 @@ class RunPage(QWidget):
         side.addLayout(buttons)
         self.refresh_styles()
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.addWidget(self.board, 1)
-        layout.addWidget(panel)
+        # board left + panel right, or board above a scrolling panel when taller than wide
+        self.shape = BoardPanelLayout(self, self.board, panel, panel_width=300)
         self._update_actions()
 
     # -- lifecycle -----------------------------------------------------------------------------
@@ -402,6 +401,10 @@ class RunPage(QWidget):
         self.banner.setStyleSheet(f"font-size: {size}px; font-weight: bold; color: {colors[tone]};")
 
     # -- ending --------------------------------------------------------------------------------
+
+    def request_end(self) -> None:
+        """Leave the page the way the End run button does (asks first while a run is on)."""
+        self._end_run_clicked()
 
     def _end_run_clicked(self) -> None:
         if self.run is None or not self.is_running():

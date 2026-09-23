@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QBoxLayout,
     QComboBox,
     QHBoxLayout,
     QHeaderView,
@@ -18,6 +19,7 @@ from PySide6.QtWidgets import (
 
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.leaderboard_page import WRONG_ROLE_COLOR
+from chesspuz.ui.responsive import CompactWatcher
 from chesspuz.userdb import Mistake
 
 
@@ -38,6 +40,7 @@ class MistakesPage(QWidget):
             "double-click one to play it now."
         )
         subtitle.setObjectName("muted")
+        subtitle.setWordWrap(True)
         self.player_box = QComboBox()
         self.player_box.currentIndexChanged.connect(self._fill)
         filters = QHBoxLayout()
@@ -65,14 +68,14 @@ class MistakesPage(QWidget):
         self.all_button.clicked.connect(lambda: self._practice(only_wrong=False))
         home = QPushButton("Home")
         home.clicked.connect(self.home_requested.emit)
-        bottom = QHBoxLayout()
+        bottom = QBoxLayout(QBoxLayout.Direction.LeftToRight)  # stacked on a phone
         bottom.addWidget(self.wrong_button)
         bottom.addWidget(self.all_button)
         bottom.addStretch()
         bottom.addWidget(home)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
+        self.shape = CompactWatcher(self, layout, stack=[bottom])
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addLayout(filters)

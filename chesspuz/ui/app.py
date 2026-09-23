@@ -232,6 +232,33 @@ class MainWindow(QMainWindow):
             sounds.player.play("click")
         return super().eventFilter(watched, event)
 
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        for page in self.pages:  # hidden pages get no resize of their own
+            shape = getattr(page, "shape", None)
+            if shape is not None:
+                shape.relayout()
+
+    def keyPressEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        if event.key() == Qt.Key.Key_Back:  # the phone's Back key: never quits, steps back
+            event.accept()
+            self.go_back()
+            return
+        super().keyPressEvent(event)
+
+    def go_back(self) -> bool:
+        """Leave the current page for the one before it; False when already on the home page."""
+        current = self.stack.currentWidget()
+        if current is self.home:
+            return False
+        if current is self.run_page:
+            self.run_page.request_end()
+        elif current is self.settings:
+            self.leave_settings()
+        else:
+            self.show_home()
+        return True
+
     def show_mistakes(self) -> None:
         self.mistakes.refresh()
         self.stack.setCurrentWidget(self.mistakes)
@@ -338,21 +365,38 @@ def _dark_title_bar(window: QMainWindow) -> None:
         pass
 
 
-def run(argv: list[str] | None = None) -> int:
+def build(
+    argv: list[str] | None = None,
+    *,
+    puzzle_db: Path | None = None,
+    user_db: Path | None = None,
+) -> tuple[QApplication, AppContext, MainWindow]:
+    """Create the application, its shared context and the (not yet shown) main window.
+
+    On a desktop the window gets its usual size and minimum; on a phone (``device.MOBILE``)
+    the platform makes every top-level window fill the screen, so no sizing is done there.
+    """
+    from chesspuz.ui import device
     from chesspuz.ui.theme import apply_dark_theme
 
     app = QApplication.instance() or QApplication(argv if argv is not None else sys.argv)
     app.setApplicationName(APP_NAME)
     apply_dark_theme(app)
     app.setWindowIcon(app_icon())
-    ctx = AppContext()
+    ctx = AppContext(puzzle_db=puzzle_db, user_db=user_db)
     window = MainWindow(ctx)
-    window.resize(1100, 760)
-    window.setMinimumSize(760, 560)
-    window.restore_geometry()
+    if not device.MOBILE:
+        window.resize(1100, 760)
+        window.setMinimumSize(760, 560)
+        window.restore_geometry()
+    window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
+    return app, ctx, window
+
+
+def run(argv: list[str] | None = None) -> int:
+    app, ctx, window = build(argv)
     window.show()
     _dark_title_bar(window)
-    window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
     try:
         return app.exec()
     finally:

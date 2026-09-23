@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QResizeEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -19,9 +20,12 @@ from PySide6.QtWidgets import (
 )
 
 from chesspuz import themes
+from chesspuz.ui import device
 from chesspuz.ui.app import AppContext
+from chesspuz.ui.responsive import is_compact, make_scroll, reflow_grid
 
 DEFAULT_PLAYER = "Player"
+MAX_TYPE_COLUMNS = 3
 
 
 class HomePage(QWidget):
@@ -40,24 +44,25 @@ class HomePage(QWidget):
         title.setObjectName("title")
         subtitle = QLabel("Survival: three lives, no clock, puzzles get harder as you solve.")
         subtitle.setObjectName("muted")
+        subtitle.setWordWrap(True)
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
         self.player_box = QComboBox()
         self.player_box.setEditable(True)
         self.player_box.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
-        self.player_box.setMinimumWidth(220)
+        self.player_box.setMinimumWidth(180)
         line_edit = self.player_box.lineEdit()
         if line_edit is not None:
             line_edit.setPlaceholderText("Player name")
 
         self.type_boxes: dict[str, QCheckBox] = {}
-        grid = QGridLayout()
-        grid.setHorizontalSpacing(24)
-        for index, name in enumerate(themes.TYPES):
+        self.types_grid = QGridLayout()
+        self.types_grid.setHorizontalSpacing(24)
+        for name in themes.TYPES:
             box = QCheckBox(name)
             box.setChecked(True)
             box.toggled.connect(self._selection_changed)
             self.type_boxes[name] = box
-            grid.addWidget(box, index % 7, index // 7)
 
         all_button = QPushButton("All")
         none_button = QPushButton("None")
@@ -74,11 +79,11 @@ class HomePage(QWidget):
         self.status_label = QLabel()
         self.status_label.setObjectName("muted")
         self.status_label.setWordWrap(True)
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignHCenter)
 
         player_row = QHBoxLayout()
         player_row.addWidget(QLabel("Player"))
-        player_row.addWidget(self.player_box)
-        player_row.addStretch()
+        player_row.addWidget(self.player_box, 1)
 
         types_header = QHBoxLayout()
         types_label = QLabel("Puzzle types")
@@ -94,14 +99,13 @@ class HomePage(QWidget):
         card_layout.addLayout(player_row)
         card_layout.addSpacing(12)
         card_layout.addLayout(types_header)
-        card_layout.addLayout(grid)
+        card_layout.addLayout(self.types_grid)
         card_layout.addSpacing(12)
         card_layout.addWidget(self.best_label)
         card_layout.addWidget(self.start_button)
         card.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
 
-        nav = QHBoxLayout()
-        nav.addStretch()
+        self.nav_buttons: list[QPushButton] = []
         for text, signal in (
             ("Leaderboard", self.leaderboard_requested),
             ("Mistakes", self.mistakes_requested),
@@ -111,20 +115,52 @@ class HomePage(QWidget):
         ):
             button = QPushButton(text)
             button.clicked.connect(signal.emit)
-            nav.addWidget(button)
+            self.nav_buttons.append(button)
+        self.nav_grid = QGridLayout()
+        nav = QHBoxLayout()
+        nav.addStretch()
+        nav.addLayout(self.nav_grid)
         nav.addStretch()
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(40, 30, 40, 30)
-        layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignHCenter)
-        layout.addWidget(subtitle, alignment=Qt.AlignmentFlag.AlignHCenter)
-        layout.addSpacing(16)
-        layout.addWidget(card, alignment=Qt.AlignmentFlag.AlignHCenter)
-        layout.addSpacing(12)
-        layout.addLayout(nav)
-        layout.addStretch()
-        layout.addWidget(self.status_label, alignment=Qt.AlignmentFlag.AlignHCenter)
+        content = QWidget()
+        self.page_layout = QVBoxLayout(content)
+        self.page_layout.addWidget(title, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.page_layout.addWidget(subtitle)
+        self.page_layout.addSpacing(16)
+        self.page_layout.addWidget(card, alignment=Qt.AlignmentFlag.AlignHCenter)
+        self.page_layout.addSpacing(12)
+        self.page_layout.addLayout(nav)
+        self.page_layout.addStretch()
+        self.page_layout.addWidget(self.status_label)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        outer.addWidget(make_scroll(content))
+        self._placed: tuple[int, int] | None = None
+        self._reflow()
         self.refresh()
+
+    # -- shape ---------------------------------------------------------------------------------
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self._reflow()
+
+    def _reflow(self) -> None:
+        """Fit the type grid and the navigation buttons to the width (1-3 columns)."""
+        compact = is_compact(self)
+        margin = 16 if compact else 40
+        self.page_layout.setContentsMargins(margin, 20 if compact else 30, margin, 20)
+        widest = max(box.sizeHint().width() for box in self.type_boxes.values())
+        available = max(200, self.width() - 2 * margin - 48)
+        columns = max(1, min(MAX_TYPE_COLUMNS, available // (widest + 24)))
+        nav_columns = len(self.nav_buttons) if not compact else 3
+        if (columns, nav_columns) != self._placed:
+            self._placed = (columns, nav_columns)
+            reflow_grid(self.types_grid, list(self.type_boxes.values()), columns)
+            reflow_grid(self.nav_grid, self.nav_buttons, nav_columns, row_major=True)
+
+    def type_columns(self) -> int:
+        return self._placed[0] if self._placed else 0
 
     # -- state ---------------------------------------------------------------------------------
 
@@ -150,7 +186,9 @@ class HomePage(QWidget):
             box.setEnabled(available)
 
         if self.ctx.puzzles is None:
-            if getattr(sys, "frozen", False):
+            if device.MOBILE:
+                hint = "this build was made without one (bundle it and reinstall)"
+            elif getattr(sys, "frozen", False):
                 hint = "open Settings and press Rebuild puzzle database (downloads about 300 MB)"
             else:
                 hint = "python main.py import --download, or Settings > Rebuild puzzle database"
@@ -158,6 +196,7 @@ class HomePage(QWidget):
         else:
             self.status_label.setText(f"{self.ctx.puzzles.count():,} puzzles loaded")
         self._selection_changed()
+        self._reflow()
 
     def player_name(self) -> str:
         return self.player_box.currentText().strip()

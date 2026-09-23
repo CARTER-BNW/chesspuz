@@ -7,6 +7,7 @@ Dark-mode PySide6 chess puzzle trainer: chess.com-style Survival mode on the Lic
 - Test: `python -m pytest -q`
 - Lint + format: `ruff check . && ruff format .`
 - Install deps: `python -m pip install -r requirements.txt -r requirements-dev.txt`
+- Android: `python android\sync.py all` (sync -> APK in the WSL box `dd-android` -> adb install + run + logs); `android/README.md` has the pipeline and phone controls, `python android\app\main.py --desktop` previews the phone layout on the PC
 - Use `python` (not `python3`); Python 3.13 on this machine. Optional venv: `python -m venv .venv` then `.venv\Scripts\activate`
 
 ## Layout
@@ -26,5 +27,6 @@ Dark-mode PySide6 chess puzzle trainer: chess.com-style Survival mode on the Lic
 - PyQt6 is also installed on this machine: only ever import PySide6 (`Signal`, not `pyqtSignal`; `exec()`, not `exec_()`).
 - Headless modules (`themes`, `session`, `run`, `importer`, `puzzledb`, `userdb`) must not import Qt.
 - Data lives in `%LOCALAPPDATA%/chesspuz` (override `CHESSPUZ_DATA_DIR`), never in the repo.
+- Pages lay themselves out from the window size (`chesspuz/ui/responsive.py`): keep every page's minimum width under ~380 px (word-wrap labels, stack rows when compact) or the phone clips it.
 
 @docs/STATUS.md

@@ -1,24 +1,28 @@
 # STATUS - chesspuz
 last_updated: 2026-09-23
-phase: released 0.1.0 (https://github.com/CARTER-BNW/chesspuz); next is play-testing the release build and gathering feedback
+phase: Phase 9 Android built (APK ready, not yet play-tested on the phone); 0.1.0 released on GitHub
 
 ## Next action
-- Install the released zip on a machine without Python (or a fresh folder), run chesspuz.exe, rebuild the database from Settings and play a run; fix whatever the frozen build gets wrong. For the next version: bump `chesspuz.__version__` and pyproject, run `build_release.bat`, `git push`, then `gh release create vX.Y.Z dist/chesspuz-X.Y.Z-windows.zip`.
+- Plug the phone in (accept the USB-debugging prompt), then `python android\sync.py install run logs`; play a Survival run in portrait and check: board taps, the Back key (never quits), Settings text size, the Mistakes / Played double-tap, a puzzle window. Fix what the phone gets wrong (crash log: `adb shell run-as org.johncarter.chesspuz cat files/chesspuz/crash.log`).
+- Then: bump `chesspuz.__version__` / pyproject to 0.2.0, `build_release.bat`, commit, `git push`, `gh release create v0.2.0 dist/chesspuz-0.2.0-windows.zip android/bin/chesspuz-0.2.0-arm64-v8a-debug.apk`.
 
 ## Blockers
-- none
+- The phone was away during the build session, so the APK is untested on a device. The first install also needs the "Allow USB debugging" prompt accepted (adb showed the device as unauthorized before it left).
 
-## Puzzle database (built 2026-09-22)
-- `python main.py import --download`: 6,100,952 rows read, 4,269,438 passed the quality filter, 291,891 kept, 0 rejected, 12 min 10 s on this machine (300 MB download kept in %LOCALAPPDATA%/chesspuz)
-- Per type: Back Rank Mate 20,401 - Discovery 26,268 - Endgame Tactics 166,296 - Fork 32,020 - Hanging Piece 24,237 - Mate in 1 38,878 - Mate in 2 40,039 - Mate in 3+ 34,166 - Mating Net 21,750 - Opposition 20,455 - Pawn Endgame 39,200 - Pin 26,178 - Promotion 25,333 - Queen Sacrifice 26,495 - Sacrifice 51,265 - Scholar's Mate 11,729 - Skewer 20,872 - Trapped Piece 16,500 - Under Promotion 924
-- The code now caps Scholar's Mate like any other type; rebuilding from Settings is optional.
+## Android build (2026-09-23)
+- `android/bin/chesspuz-0.2.0-arm64-v8a-debug.apk`, about 197 MB (40 MB of that is the puzzle database; the Qt deploy recipe packs every Qt library, trimming is a later optimisation). First build 9 min (CPython 3.11 etc. compiled), later builds 1-2 min.
+- Toolchain: WSL box `dd-android` (shared with Digit Defender) + `~/chesspuz-venv` (Python 3.11, PySide6 6.11.2 host tools, buildozer 1.6.0, pip), Qt Android wheels 6.11.2 aarch64 in `~/wheels`, python-for-android pinned to `3762c88c` (last CPython 3.11 revision), NDK r28c, API 36. Everything is reproducible from `android/wsl/setup.sh`.
+- Verified offscreen: every page at 412x915 (screenshots), 158 tests green, ruff clean. `python android\app\main.py --desktop` shows the phone layout on the PC.
+
+## Puzzle database (rebuilt 2026-09-23)
+- The database was missing from this machine at session start; `python main.py import --download` rebuilt it: 288,504 puzzles in `%LOCALAPPDATA%\chesspuz\puzzles.sqlite` (109 MB), the 300 MB Lichess file kept next to it. Scholar's Mate is now capped (8,342).
 
 ## Last session
-- Done (2026-09-23): feedback round 2 (Settings from a run, sound mixer, board and piece colours, text size, Clear stats, per-puzzle timer, Played page, puzzle windows, all-time best streak); release tooling (LICENSE, PyInstaller spec, build_release.bat, icon, frozen-build hint); 150 tests, ruff clean.
-- Done (2026-09-23): feedback round 1 (keep trying after a mistake, Show solution / Next, Mistakes page with practice, sounds). Done (2026-09-22): Phases 0-7.
-- Failed / dead ends (do not retry): Bash tool truncates commands over ~8 KB (use the Write tool for big files); pytest-qt `mouseMove` is unreliable offscreen, tests send QMouseEvents directly; a shell pipeline hides pytest's exit code, check PIPESTATUS before committing; winsound cannot play asynchronously from memory, play from files.
+- Done (2026-09-23, Android): `android/` pipeline (sync.py, wsl/setup.sh, wsl/build.sh, wsl/patch_spec.py, mobile/entry.py, README), responsive pages (`chesspuz/ui/responsive.py`, `device.py`; home/run/review/settings/table pages/puzzle window), Back-key handling, phone theme, bundled database, tests/test_android.py, docs (spec, PLAN phase 9, README, CLAUDE).
+- Done (2026-09-23, earlier): feedback rounds 1-2, release tooling, v0.1.0 on GitHub. Done (2026-09-22): Phases 0-7.
+- Failed / dead ends (do not retry): pyside6-android-deploy refuses Python 3.12+ (use the 3.11 venv); a uv venv has no pip, and buildozer needs `python -m pip` (install pip into it); the deploy tool needs tqdm (its `requirements-android.txt`); `buildozer init` prompts "running as root" before a spec exists (`BUILDOZER_WARN_ON_ROOT=0`); a page's minimum width above ~380 px clips on the phone (word-wrap labels, stack rows). Earlier: Bash tool truncates commands over ~8 KB (use the Write tool); pytest-qt `mouseMove` is unreliable offscreen; a shell pipeline hides pytest's exit code; winsound cannot play asynchronously from memory.
 
 ## Verify with
 - `python -m pytest -q`
 - `ruff check . && ruff format .`
-- `run.bat` (GUI from source), `build_release.bat` (release zip)
+- `run.bat` (GUI from source), `build_release.bat` (release zip), `python android\sync.py build` (APK), `python android\sync.py status`

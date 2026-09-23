@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QBoxLayout,
     QComboBox,
     QHBoxLayout,
     QHeaderView,
@@ -20,6 +21,7 @@ from PySide6.QtWidgets import (
 
 from chesspuz import themes
 from chesspuz.ui.app import AppContext
+from chesspuz.ui.responsive import CompactWatcher
 from chesspuz.userdb import RunRecord
 
 RUN_ID_ROLE = Qt.ItemDataRole.UserRole
@@ -74,9 +76,14 @@ class LeaderboardPage(QWidget):
         title.setObjectName("title")
         self.player_box = QComboBox()
         self.types_box = QComboBox()
+        # long type-set labels must not dictate the page width (a phone is 412 px wide)
+        self.types_box.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.types_box.setMinimumContentsLength(12)
         self.player_box.currentIndexChanged.connect(self._fill_tables)
         self.types_box.currentIndexChanged.connect(self._fill_tables)
-        filters = QHBoxLayout()
+        filters = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         filters.addWidget(QLabel("Player"))
         filters.addWidget(self.player_box)
         filters.addSpacing(16)
@@ -96,6 +103,7 @@ class LeaderboardPage(QWidget):
 
         self.hint = QLabel("Double-click a run to review it.")
         self.hint.setObjectName("muted")
+        self.hint.setWordWrap(True)
         home = QPushButton("Home")
         home.clicked.connect(self.home_requested.emit)
         bottom = QHBoxLayout()
@@ -104,7 +112,7 @@ class LeaderboardPage(QWidget):
         bottom.addWidget(home)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
+        self.shape = CompactWatcher(self, layout, stack=[filters])
         layout.addWidget(title)
         layout.addLayout(filters)
         layout.addWidget(self.tabs, 1)

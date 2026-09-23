@@ -11,14 +11,16 @@ from collections.abc import Callable
 
 import chess
 from PySide6.QtCore import Qt, QTimer, Signal
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout, QWidget
+from PySide6.QtGui import QKeyEvent
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QVBoxLayout, QWidget
 
 from chesspuz import sounds
 from chesspuz.puzzle import Puzzle
 from chesspuz.session import Outcome, PuzzleSession, Status
-from chesspuz.ui import theme
+from chesspuz.ui import device, theme
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.board import BoardWidget
+from chesspuz.ui.responsive import BoardPanelLayout
 from chesspuz.userdb import Player
 
 OPPONENT_DELAY_MS = 400
@@ -80,12 +82,12 @@ class PuzzleWindow(QWidget):
         self.again_button.clicked.connect(self.try_again)
         self.clear_button = QPushButton("Clear arrows")
         self.clear_button.clicked.connect(self.board.clear_annotations)
+        self.clear_button.setVisible(not device.MOBILE)  # no right button on a touch screen
         self.close_button = QPushButton("Close")
         self.close_button.clicked.connect(self.close)
 
         panel = QFrame()
         panel.setFrameShape(QFrame.Shape.StyledPanel)
-        panel.setFixedWidth(260)
         side = QVBoxLayout(panel)
         side.addWidget(self.info_label)
         side.addWidget(self.time_label)
@@ -95,10 +97,9 @@ class PuzzleWindow(QWidget):
         side.addStretch()
         side.addWidget(self.clear_button)
         side.addWidget(self.close_button)
-        layout = QHBoxLayout(self)
-        layout.addWidget(self.board, 1)
-        layout.addWidget(panel)
-        self.resize(820, 600)
+        self.shape = BoardPanelLayout(self, self.board, panel, panel_width=260)
+        if not device.MOBILE:  # the phone shows every window full screen
+            self.resize(820, 600)
 
         self._ticker = QTimer(self)
         self._ticker.setInterval(100)
@@ -256,6 +257,13 @@ class PuzzleWindow(QWidget):
         self.time_label.setStyleSheet(f"font-size: {theme.px(18)}px; color: #9aa0a6;")
 
     # -- closing -------------------------------------------------------------------------------
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:  # noqa: N802 (Qt override)
+        if event.key() == Qt.Key.Key_Back:  # the phone's Back key closes this window
+            event.accept()
+            self.close()
+            return
+        super().keyPressEvent(event)
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         self._generation += 1

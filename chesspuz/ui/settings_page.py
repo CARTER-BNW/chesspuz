@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import chess
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor
+from PySide6.QtGui import QColor, QResizeEvent
 from PySide6.QtWidgets import (
+    QBoxLayout,
     QCheckBox,
     QColorDialog,
     QComboBox,
@@ -19,7 +20,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
-    QScrollArea,
     QSlider,
     QSpinBox,
     QVBoxLayout,
@@ -29,10 +29,11 @@ from PySide6.QtWidgets import (
 from chesspuz import paths, sounds
 from chesspuz.importer import ImportSettings
 from chesspuz.run import RampSettings
-from chesspuz.ui import theme
+from chesspuz.ui import device, theme
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.board import BoardWidget
 from chesspuz.ui.pieces import DEFAULT_BLACK, DEFAULT_WHITE, PieceCache, normalize_color
+from chesspuz.ui.responsive import is_compact, make_scroll
 from chesspuz.ui.workers import ImportWorker
 
 DEFAULTS = {
@@ -85,12 +86,13 @@ class SettingsPage(QWidget):
         self.step_spin = self._spin(0, 200, 5)
         self.window_spin = self._spin(25, 400, 25)
         difficulty = QGroupBox("Difficulty")
-        form = QFormLayout(difficulty)
+        form = self._form(difficulty)
         form.addRow("First puzzle rating", self.start_spin)
         form.addRow("Rating step per solved puzzle", self.step_spin)
         form.addRow("Rating window (+/-)", self.window_spin)
         self.ramp_preview = QLabel()
         self.ramp_preview.setObjectName("muted")
+        self.ramp_preview.setWordWrap(True)
         form.addRow("", self.ramp_preview)
 
         # board
@@ -115,16 +117,17 @@ class SettingsPage(QWidget):
         self.preview.show_coordinates = False
         preview_fen = "rnbq1rk1/ppp2ppp/8/8/8/8/PPP2PPP/RNBQ1RK1 w - - 0 1"
         self.preview.set_position(chess.Board(preview_fen))
-        board_row = QHBoxLayout()
-        board_row.addLayout(colors)
-        board_row.addSpacing(16)
-        board_row.addWidget(self.preview, alignment=Qt.AlignmentFlag.AlignTop)
-        board_row.addStretch()
+        # colours beside the preview, or above it when the page is narrow
+        self.board_row = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self.board_row.addLayout(colors)
+        self.board_row.addSpacing(16)
+        self.board_row.addWidget(self.preview, alignment=Qt.AlignmentFlag.AlignTop)
+        self.board_row.addStretch()
         board = QGroupBox("Board")
-        board_form = QFormLayout(board)
+        board_form = self._form(board)
         board_form.addRow("Move animation (ms)", self.animation_spin)
         board_form.addRow("", self.coordinates_box)
-        board_form.addRow("Colours", board_row)
+        board_form.addRow("Colours", self.board_row)
 
         # sounds
         self.mute_box = QCheckBox("Mute all sounds")
@@ -136,7 +139,7 @@ class SettingsPage(QWidget):
         for row, (name, label) in enumerate(SOUND_LABELS.items(), start=1):
             slider = QSlider(Qt.Orientation.Horizontal)
             slider.setRange(0, 100)
-            slider.setMinimumWidth(180)
+            slider.setMinimumWidth(120)
             slider.valueChanged.connect(self._save)
             value = QLabel("100")
             value.setFixedWidth(32)
@@ -158,7 +161,7 @@ class SettingsPage(QWidget):
         self.text_spin.setSpecialValueText("default")
         self.text_spin.valueChanged.connect(self._save)
         text_group = QGroupBox("Text")
-        text_form = QFormLayout(text_group)
+        text_form = self._form(text_group)
         text_form.addRow("Text size (points, 0 = default)", self.text_spin)
 
         # engine
@@ -180,6 +183,7 @@ class SettingsPage(QWidget):
         engine_form = QVBoxLayout(engine)
         engine_form.addLayout(engine_row)
         engine_form.addWidget(self.engine_status)
+        self.engine_group = engine
 
         # data
         self.clear_player_box = QComboBox()
@@ -214,7 +218,8 @@ class SettingsPage(QWidget):
         self.progress_label = QLabel()
         self.progress_label.setObjectName("muted")
         database = QGroupBox("Puzzle database")
-        db_form = QFormLayout(database)
+        self.database_group = database
+        db_form = self._form(database)
         db_form.addRow("Location", self.db_label)
         db_form.addRow("Puzzles kept per rating bucket and type", self.per_type_spin)
         buttons = QHBoxLayout()
@@ -234,19 +239,22 @@ class SettingsPage(QWidget):
         bottom.addStretch()
         bottom.addWidget(self.back_button)
 
+        # a phone has no engine executable and cannot rebuild the database (no download, no
+        # zstandard): those sections stay desktop-only
+        for group in (engine, database):
+            group.setVisible(not device.MOBILE)
+
         content = QWidget()
         column = QVBoxLayout(content)
         for group in (title, difficulty, board, sound_group, text_group, engine, data, database):
             column.addWidget(group)
         column.addStretch()
         column.addLayout(bottom)
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setWidget(content)
-        scroll.setFrameShape(QScrollArea.Shape.NoFrame)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.addWidget(scroll)
+        self.page_layout = QVBoxLayout(self)
+        self.page_layout.setContentsMargins(24, 20, 24, 20)
+        self.page_layout.addWidget(make_scroll(content))
+        self._compact: bool | None = None
+        self._reflow()
         self.refresh()
 
     def _spin(self, lo: int, hi: int, step: int) -> QSpinBox:
@@ -255,6 +263,34 @@ class SettingsPage(QWidget):
         spin.setSingleStep(step)
         spin.valueChanged.connect(self._save)
         return spin
+
+    def _form(self, group: QGroupBox) -> QFormLayout:
+        """A form whose rows put the label above the field when the page is narrow."""
+        form = QFormLayout(group)
+        form.setRowWrapPolicy(QFormLayout.RowWrapPolicy.WrapLongRows)
+        if not hasattr(self, "forms"):
+            self.forms: list[QFormLayout] = []
+        self.forms.append(form)
+        return form
+
+    # -- shape ---------------------------------------------------------------------------------
+
+    def resizeEvent(self, event: QResizeEvent) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self._reflow()
+
+    def _reflow(self) -> None:
+        compact = is_compact(self)
+        if compact == self._compact:
+            return
+        self._compact = compact
+        margin = 12 if compact else 24
+        self.page_layout.setContentsMargins(margin, 12 if compact else 20, margin, 12)
+        directions = QBoxLayout.Direction
+        self.board_row.setDirection(directions.TopToBottom if compact else directions.LeftToRight)
+        policies = QFormLayout.RowWrapPolicy
+        for form in self.forms:
+            form.setRowWrapPolicy(policies.WrapAllRows if compact else policies.WrapLongRows)
 
     # -- load / save ---------------------------------------------------------------------------
 

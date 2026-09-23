@@ -81,6 +81,18 @@ Outcome: the app is public and installable without Python.
 - [x] GitHub release v0.1.0 with the zip attached
 Done when: a fresh machine can download the zip from the Releases page, run chesspuz.exe and rebuild the database from Settings.
 
+## Phase 9 - Android
+Outcome: the app plays on the phone from an APK built with one command. Spec: docs/specs/android.md
+- [x] Toolchain in the WSL box: Python 3.11 venv with pyside6-android-deploy, Qt Android wheels 6.11.2, python-for-android pinned to its last CPython 3.11 revision (`android/wsl/setup.sh`)
+- [x] `android/sync.py` (sync, build, install, run, logs, status, all), `wsl/build.sh` + `wsl/patch_spec.py`, `mobile/entry.py`
+- [x] Responsive pages: board above a scrolling panel in portrait, home grid re-flows, settings wraps, table pages stack; phone flag for text size, touch-sized controls, desktop-only settings hidden; Back key steps back
+- [x] Puzzle database bundled in the APK, user data in the app's private files dir
+- [x] Tests for the portrait layout, the Back key, the entry and the spec patcher; offscreen screenshots at 412x915 checked
+- [x] APK builds: `android/bin/chesspuz-<version>-arm64-v8a-debug.apk` (about 200 MB; first build 9 min, later builds 1-2 min)
+- [ ] Installed and play-tested on the Pixel 9a (phone was away during the build session)
+- [ ] Later: trim unused Qt libraries from the APK (the deploy recipe copies every Qt module), sounds on the phone
+Done when: `python android\sync.py all` installs the APK and a Survival run plays through in portrait on the phone.
+
 ## Decisions
 - 2026-09-22: scaffolded with the python template - standard layout
 - 2026-09-22: GUI is PySide6 (Fusion + dark scheme) - modern dark theme, real tables, and the SVG pieces bundled with python-chess need no art assets
@@ -100,3 +112,7 @@ Done when: a fresh machine can download the zip from the Releases page, run ches
 - 2026-09-23: best streak shows this run's best and an all-time record computed from run history (no schema change)
 - 2026-09-23: licence is GPL-3.0-or-later - python-chess is GPL-3, so a public repo must be GPL-compatible
 - 2026-09-23: releases are PyInstaller one-folder zips - no installer framework on this machine; Inno Setup can wrap the folder later
+- 2026-09-23: the phone build uses Qt's pyside6-android-deploy to generate the buildozer project and plain buildozer to build, in the Digit Defender WSL box - the only supported way to get PySide6 on Android; one shared box keeps the SDK/NDK in one place
+- 2026-09-23: python-for-android is pinned to commit 3762c88c (2025-10-26, CPython 3.11.13) - the Qt Android wheels link libpython3.11.so and p4a's current release builds 3.14
+- 2026-09-23: one code base, pages shaped by window size (portrait = board above a scrolling panel) instead of a separate phone UI - the desktop stays the master and a narrow desktop window previews the phone
+- 2026-09-23: the puzzle database ships inside the APK (40 MB compressed) rather than being downloaded on the phone - no zstandard or 300 MB download on the device; user data lives outside the app folder so updates keep it

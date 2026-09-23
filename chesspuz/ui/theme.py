@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QFont, QPalette
 from PySide6.QtWidgets import QApplication
 
+from chesspuz.ui import device
 from chesspuz.ui.annotations import Brush
 
 # Board (chess.com green, familiar to the player)
@@ -59,8 +60,18 @@ QLabel#big { font-size: {big}px; font-weight: bold; }
 QHeaderView::section { background-color: #303134; padding: 4px; border: none; }
 QTableView { gridline-color: #3c4043; }
 """
+# finger-sized controls on a phone (sizes in logical pixels, which Android scales)
+_MOBILE_QSS_TEMPLATE = """
+QCheckBox::indicator, QRadioButton::indicator { width: {ind}px; height: {ind}px; }
+QComboBox, QSpinBox, QLineEdit { min-height: {field}px; }
+QHeaderView::section { padding: 8px; }
+QTableView::item, QListWidget::item { padding: 4px; }
+QScrollBar:vertical { width: 14px; }
+QScrollBar:horizontal { height: 14px; }
+"""
 
 DEFAULT_POINT_SIZE = 9
+MOBILE_POINT_SIZE = 14  # Android's own body text size (1 pt = 1 dp on the phone)
 _scale = 1.0
 _base_points = DEFAULT_POINT_SIZE
 
@@ -80,12 +91,16 @@ def px(base: int) -> int:
 
 
 def qss() -> str:
-    return (
+    mobile = device.MOBILE
+    text = (
         _QSS_TEMPLATE.replace("{title}", str(px(26)))
         .replace("{big}", str(px(20)))
-        .replace("{pad_v}", str(px(6)))
-        .replace("{pad_h}", str(px(14)))
+        .replace("{pad_v}", str(px(10 if mobile else 6)))
+        .replace("{pad_h}", str(px(16 if mobile else 14)))
     )
+    if mobile:
+        text += _MOBILE_QSS_TEMPLATE.replace("{ind}", str(px(22))).replace("{field}", str(px(34)))
+    return text
 
 
 def apply_text_size(app: QApplication, points: int | None) -> None:
@@ -133,4 +148,7 @@ def apply_dark_theme(app: QApplication) -> None:
     global _base_points
     size = app.font().pointSize()
     _base_points = size if size > 0 else DEFAULT_POINT_SIZE
+    if device.MOBILE:
+        _base_points = MOBILE_POINT_SIZE
+        apply_text_size(app, None)
     app.setStyleSheet(qss())

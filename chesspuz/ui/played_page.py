@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.leaderboard_page import WRONG_ROLE_COLOR
+from chesspuz.ui.responsive import CompactWatcher
 from chesspuz.userdb import PlayedRecord
 
 
@@ -34,6 +35,7 @@ class PlayedPage(QWidget):
         title.setObjectName("title")
         subtitle = QLabel("Every attempt, newest first. Double-click a puzzle to play it again.")
         subtitle.setObjectName("muted")
+        subtitle.setWordWrap(True)
         self.player_box = QComboBox()
         self.player_box.currentIndexChanged.connect(self._fill)
         filters = QHBoxLayout()
@@ -59,7 +61,7 @@ class PlayedPage(QWidget):
         bottom.addWidget(home)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
+        self.shape = CompactWatcher(self, layout)
         layout.addWidget(title)
         layout.addWidget(subtitle)
         layout.addLayout(filters)

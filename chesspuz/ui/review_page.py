@@ -20,9 +20,11 @@ from PySide6.QtWidgets import (
 )
 
 from chesspuz.review import PLAYED, SOLUTION, ReviewModel
+from chesspuz.ui import device
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.board import BoardWidget, InputState
 from chesspuz.ui.engine import EngineWorker
+from chesspuz.ui.responsive import BoardPanelLayout
 from chesspuz.userdb import RunPuzzleRecord, RunRecord
 
 WRONG_COLOR = QColor("#e57373")
@@ -47,8 +49,10 @@ class ReviewPage(QWidget):
 
         self.header = QLabel()
         self.header.setObjectName("big")
+        self.header.setWordWrap(True)
         self.subheader = QLabel()
         self.subheader.setObjectName("muted")
+        self.subheader.setWordWrap(True)
         self.puzzle_list = QListWidget()
         self.puzzle_list.currentRowChanged.connect(self._on_puzzle_row)
         self.puzzle_list.setMaximumHeight(190)
@@ -94,6 +98,7 @@ class ReviewPage(QWidget):
         self.engine_label.setWordWrap(True)
         self.clear_button = QPushButton("Clear arrows")
         self.clear_button.clicked.connect(self.board.clear_annotations)
+        self.clear_button.setVisible(not device.MOBILE)  # no right button on a touch screen
         self.home_button = QPushButton("Home")
         self.home_button.clicked.connect(self.home_requested.emit)
 
@@ -107,7 +112,6 @@ class ReviewPage(QWidget):
 
         panel = QFrame()
         panel.setFrameShape(QFrame.Shape.StyledPanel)
-        panel.setFixedWidth(340)
         side = QVBoxLayout(panel)
         side.addWidget(self.header)
         side.addWidget(self.subheader)
@@ -128,10 +132,7 @@ class ReviewPage(QWidget):
         bottom.addWidget(self.home_button)
         side.addLayout(bottom)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 12, 12, 12)
-        layout.addWidget(self.board, 1)
-        layout.addWidget(panel)
+        self.shape = BoardPanelLayout(self, self.board, panel, panel_width=340)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     # -- loading -------------------------------------------------------------------------------

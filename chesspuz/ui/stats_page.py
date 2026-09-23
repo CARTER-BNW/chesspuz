@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from chesspuz.ui.app import AppContext
+from chesspuz.ui.responsive import CompactWatcher
 
 ALL_PLAYERS = "All players"
 
@@ -38,6 +39,7 @@ class StatsPage(QWidget):
 
         self.summary = QLabel()
         self.summary.setObjectName("big")
+        self.summary.setWordWrap(True)
         self.table = QTableWidget(0, 4)
         self.table.setHorizontalHeaderLabels(["Type", "Attempts", "Solved", "Accuracy"])
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -56,7 +58,7 @@ class StatsPage(QWidget):
         bottom.addWidget(home)
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
+        self.shape = CompactWatcher(self, layout)
         layout.addWidget(title)
         layout.addLayout(filters)
         layout.addWidget(self.summary)
