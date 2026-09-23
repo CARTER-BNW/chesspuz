@@ -93,8 +93,13 @@ Outcome: the app plays on the phone from an APK built with one command. Spec: do
 - [x] Unused Qt trimmed from the APK (197 MB -> 70 MB) and a signed release build (own key, no debug "16 KB compatibility" dialog)
 - [x] Sounds on the phone through AAudio (ctypes), no extra libraries
 - [x] Release v0.2.0 on GitHub: Windows zip + Android APK
-- [ ] The trimmed release APK run on the Pixel 9a (sound audible, no dialog); then play-tested by John: a whole Survival run, review, mistakes practice, settings
-Done when: `python android\sync.py all` installs the APK and a Survival run plays through in portrait on the phone.
+- [x] The release APK installed from GitHub on the Pixel 9a by John: all works (sound, no dialog, layout, Back)
+Done when: `python android\sync.py all` installs the APK and a Survival run plays through in portrait on the phone. (Done 2026-09-23.)
+
+## Phase 10 - Feedback round 3
+Outcome: John's next change list, on desktop and phone.
+- [ ] Collect the list, spec anything bigger than a fix, implement, test, `python android\sync.py all`, release 0.2.x
+Done when: the changes are on the phone and in a GitHub release.
 
 ## Decisions
 - 2026-09-22: scaffolded with the python template - standard layout

@@ -1,6 +1,6 @@
 # Android build
 
-Status: implemented 2026-09-23 (first APK). Pipeline and phone controls: `android/README.md`.
+Status: done 2026-09-23 (release 0.2.0, verified on the phone). Pipeline and phone controls: `android/README.md`.
 
 ## Goal
 Play chesspuz on the phone (Pixel 9a, Android 16) with the same puzzle database, players and
@@ -54,6 +54,6 @@ run -> logcat dump. Details and the toolchain versions: `android/README.md`.
       database; Back behaves as above (2026-09-23, checked over adb)
 - [x] release build: signed, trimmed to the Qt in use (70 MB), sounds through AAudio, on the
       GitHub release v0.2.0 (2026-09-23)
-- [ ] the trimmed release APK checked on the phone (starts, sound audible, no dialog)
-- [ ] a whole run, review and practice play-tested by hand on the phone
+- [x] the release APK checked on the phone by John: starts, sound audible, no dialog,
+      layout and Back as designed (2026-09-23)
 - [x] `python -m pytest -q` covers the portrait layout, the Back key, the entry and the patcher
