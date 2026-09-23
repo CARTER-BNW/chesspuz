@@ -42,10 +42,11 @@ class HomePage(QWidget):
 
         title = QLabel("chesspuz")
         title.setObjectName("title")
-        subtitle = QLabel("Survival: three lives, no clock, puzzles get harder as you solve.")
+        subtitle = QLabel()  # text set in refresh(): it names the current number of lives
         subtitle.setObjectName("muted")
         subtitle.setWordWrap(True)
         subtitle.setAlignment(Qt.AlignmentFlag.AlignHCenter)
+        self.subtitle = subtitle
 
         self.player_box = QComboBox()
         self.player_box.setEditable(True)
@@ -166,6 +167,11 @@ class HomePage(QWidget):
 
     def refresh(self) -> None:
         """Reload players, counts and the remembered selection (called whenever shown)."""
+        lives = self.ctx.lives()
+        noun = "life" if lives == 1 else "lives"
+        self.subtitle.setText(
+            f"Survival: {lives} {noun}, no clock, puzzles get harder as you solve."
+        )
         current = self.ctx.last_player() or self.player_name() or DEFAULT_PLAYER
         self.player_box.blockSignals(True)
         self.player_box.clear()
@@ -216,9 +222,13 @@ class HomePage(QWidget):
         name = self.player_name()
         if types and name:
             players = {p.name: p for p in self.ctx.users.players()}
-            best = self.ctx.users.best_score(players[name].id, types) if name in players else 0
+            lives = self.ctx.lives()
+            best = 0
+            if name in players:
+                best = self.ctx.users.best_score(players[name].id, types, lives=lives)
             label = "all types" if len(types) == len(themes.TYPES) else f"{len(types)} types"
-            self.best_label.setText(f"Best score with {label}: {best}")
+            noun = "life" if lives == 1 else "lives"
+            self.best_label.setText(f"Best score with {label} and {lives} {noun}: {best}")
         else:
             self.best_label.setText("Pick at least one puzzle type.")
 

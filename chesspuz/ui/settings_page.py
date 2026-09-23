@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 
 from chesspuz import paths, sounds
 from chesspuz.importer import ImportSettings
-from chesspuz.run import RampSettings
+from chesspuz.run import DEFAULT_LIVES, MAX_LIVES, MIN_LIVES, RampSettings
 from chesspuz.ui import device, theme
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.board import BoardWidget
@@ -37,6 +37,7 @@ from chesspuz.ui.responsive import is_compact, make_scroll
 from chesspuz.ui.workers import ImportWorker
 
 DEFAULTS = {
+    "lives": DEFAULT_LIVES,
     "start_rating": RampSettings().start,
     "step": RampSettings().step,
     "window": RampSettings().window,
@@ -82,11 +83,14 @@ class SettingsPage(QWidget):
         title.setObjectName("title")
 
         # difficulty
+        self.lives_spin = self._spin(MIN_LIVES, MAX_LIVES, 1)
+        self.lives_spin.setToolTip("Mistakes a Survival run survives; the next run uses it")
         self.start_spin = self._spin(400, 2600, 50)
         self.step_spin = self._spin(0, 200, 5)
         self.window_spin = self._spin(25, 400, 25)
         difficulty = QGroupBox("Difficulty")
         form = self._form(difficulty)
+        form.addRow(f"Lives per run ({MIN_LIVES}-{MAX_LIVES})", self.lives_spin)
         form.addRow("First puzzle rating", self.start_spin)
         form.addRow("Rating step per solved puzzle", self.step_spin)
         form.addRow("Rating window (+/-)", self.window_spin)
@@ -299,6 +303,7 @@ class SettingsPage(QWidget):
 
     def refresh(self) -> None:
         self._loading = True
+        self.lives_spin.setValue(self.ctx.lives())
         self.start_spin.setValue(self.ctx.int_setting("start_rating", DEFAULTS["start_rating"]))
         self.step_spin.setValue(self.ctx.int_setting("step", DEFAULTS["step"]))
         self.window_spin.setValue(self.ctx.int_setting("window", DEFAULTS["window"]))
@@ -327,6 +332,7 @@ class SettingsPage(QWidget):
     def _save(self, *_args: object) -> None:
         if self._loading:
             return
+        self.ctx.set_setting("lives", str(self.lives_spin.value()))
         self.ctx.set_setting("start_rating", str(self.start_spin.value()))
         self.ctx.set_setting("step", str(self.step_spin.value()))
         self.ctx.set_setting("window", str(self.window_spin.value()))

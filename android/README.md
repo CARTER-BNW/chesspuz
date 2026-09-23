@@ -79,12 +79,14 @@ them, shiboken, CPython 3.11 with sqlite, openssl and libffi, and the Python bun
   (`files/app/puzzles.sqlite`, replaced on every update). `crash.log` next to `user.sqlite`
   holds the traceback of a failed start:
   `adb shell run-as org.johncarter.chesspuz cat files/chesspuz/crash.log`.
-- Back key: closes a puzzle window, asks to end a running run, leaves Settings, otherwise
-  returns to the home page; it never quits the app.
+- Back key: resumes a paused run, closes a puzzle window, asks to end a running run, leaves
+  Settings, otherwise returns to the home page; it never quits the app.
+- Pause (while solving): the clock stops and an opaque screen with a Resume button covers
+  everything until Resume or Back.
 - Touch: tap a piece then its target, or drag it. There is no right button, so annotation
   arrows (and the Clear arrows buttons) are absent. Double-tap a row in Played / Mistakes /
   the run overview to open that puzzle.
-- Settings: text size (default 14 pt on the phone), board colours, animation, sounds,
-  difficulty and Clear stats. The engine and database-rebuild sections are desktop-only.
+- Settings: lives per run, text size (default 14 pt on the phone), board colours, animation,
+  sounds, difficulty and Clear stats. The engine and database-rebuild sections are desktop-only.
 - Log: `python android\sync.py logs` (Python, Qt and crash lines), `--follow 30` for a live
   stream.

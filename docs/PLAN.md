@@ -97,8 +97,12 @@ Outcome: the app plays on the phone from an APK built with one command. Spec: do
 Done when: `python android\sync.py all` installs the APK and a Survival run plays through in portrait on the phone. (Done 2026-09-23.)
 
 ## Phase 10 - Feedback round 3
-Outcome: John's next change list, on desktop and phone.
-- [ ] Collect the list, spec anything bigger than a fix, implement, test, `python android\sync.py all`, release 0.2.x
+Outcome: John's next change list, on desktop and phone. Spec: docs/specs/lives-and-pause.md
+- [x] Lives per run in Settings (1-10, default 3), stored on every run; hearts and the home page follow it
+- [x] Pause while solving: clock frozen (headless `pause`/`resume`), opaque full-page overlay with Resume, Back resumes on the phone
+- [x] Leaderboard and Stats per number of lives: a run with more lives counts on the boards for fewer lives with its score at that many mistakes
+- [x] Tests (tests/test_round3.py), offscreen screenshots at 412x915 and 1100x760, version 0.3.0
+- [ ] Release 0.3.0: Windows zip + APK on GitHub; APK installed on the phone (`python android\sync.py install run` once it is on USB)
 Done when: the changes are on the phone and in a GitHub release.
 
 ## Decisions
@@ -127,3 +131,6 @@ Done when: the changes are on the phone and in a GitHub release.
 - 2026-09-23: phone sound goes through Android's AAudio C API via ctypes - PySide6's Android build has no QJniObject and QtMultimedia would add 30 MB of ffmpeg
 - 2026-09-23: the APK is a signed release build with our own key (backed up in D:\Claude\secrets) - Android's "16 KB compatibility" dialog only shows for debuggable apps, and libshiboken6's 4 KB alignment cannot be fixed on our side
 - 2026-09-23: the generated PySide6 recipe is patched to keep only the Qt the app uses - the deploy tool packs every Qt module (197 MB APK); the dependency closure is computed with llvm-readobj so nothing needed goes missing
+- 2026-09-23: lives per run are a setting (1-10) stored on each run row, and boards/stats are per number of lives: a run played with more lives also counts on the boards for fewer lives, scored as it stood when it lost that many (John's rule: with 3 lives set, the part before the first mistake is a valid 1-life score) - keeps every run comparable without separate modes, computed from run_puzzles at query time (no extra columns)
+- 2026-09-23: Pause is only offered while solving - no timer is pending then, so nothing can advance under the cover; the overlay is an opaque child widget of the run page (not a dialog), so the position cannot be studied for free and the Back key can resume it
+- 2026-09-23: every page keeps its wide-shape minimum width under the 600 px compact threshold (filters on separate rows) - the phone emulation and any resize path must be able to cross into the compact shape; only the real phone shapes pages from the screen before showing

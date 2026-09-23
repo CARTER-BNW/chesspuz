@@ -1,8 +1,8 @@
 # Spec - Survival puzzle trainer
 
 ## Goal
-A dark-mode desktop chess puzzle trainer (PySide6) modelled on chess.com Survival: three lives, no
-clock, puzzles get harder the more you solve, then the run ends and you start again. Runs are saved;
+A dark-mode desktop chess puzzle trainer (PySide6) modelled on chess.com Survival: three lives
+(a setting, 1-10), no clock, puzzles get harder the more you solve, then the run ends and you start again. Runs are saved;
 you can replay every puzzle of a run, explore alternative moves, annotate the board with arrows and
 square highlights, and compare runs on local leaderboards. Puzzles come from the Lichess open puzzle
 database (CC0), imported once into a local SQLite file and filtered by the 19 chess.com puzzle types.
@@ -22,13 +22,16 @@ database (CC0), imported once into a local SQLite file and filtered by the 19 ch
 - A solver move is correct when it equals the expected move (compared as `chess.Move`, so castling
   works in both UCI spellings) or when it gives checkmate (Lichess rule: any mate wins the puzzle).
 - A wrong move loses one life, the puzzle is marked failed, the remaining solution auto-plays, and
-  the next puzzle starts. Three lost lives end the run.
+  the next puzzle starts. Losing every life ends the run (three lives by default, 1-10 in
+  Settings; a run can be paused while solving: `lives-and-pause.md`).
 - Pawns reaching the last rank always open a promotion chooser; never auto-queen.
 - Difficulty: with `n` puzzles solved so far the next puzzle targets rating `start + n * step`
   (defaults 600, 40, cap 3000); a failed puzzle does not raise the difficulty. Pick a random unseen puzzle within +/-75 of the target matching the chosen types; widen to
   +/-150, +/-300, any rating, then allow seen puzzles. A run never ends for lack of puzzles.
 - Score = puzzles solved. Leaderboard order: score desc, then total solving time asc. Only runs
-  with the same type selection are compared.
+  with the same type selection are compared. Boards and stats are per number of lives: a run
+  played with more lives counts on the boards for fewer lives with the score it had when it
+  lost that many (`lives-and-pause.md`).
 - Annotations (chess.com style): right-drag draws an arrow, right-click toggles a square highlight,
   repeating an identical arrow/highlight removes it, any left click on the board clears them all.
   Shift / Ctrl / Alt while drawing select alternative colours.
@@ -66,7 +69,7 @@ solution with python-chess.
   `(puzzle_id)`, `puzzles(rating)` index, `theme_counts(name, kind, count)`, `meta(key, value)`.
 - `user.sqlite` (precious, WAL): `players(id, name UNIQUE, created_at)`, `runs(id, player_id,
   started_at, ended_at, status active|finished|abandoned|quit, score, lives_lost, types_json,
-  start_rating, step, max_rating_solved, total_ms)`, `run_puzzles(run_id, seq, puzzle_id, fen,
+  start_rating, step, max_rating_solved, total_ms, mode, lives)`, `run_puzzles(run_id, seq, puzzle_id, fen,
   moves, rating, types_json, result solved|failed, target_rating, solve_ms, player_moves)`,
   `settings(key, value)`. Seen puzzles = `run_puzzles` rows for that player.
 - Import: stream the `.zst` with zstandard (`read_across_frames=True`), `csv.DictReader`, filter

@@ -1,14 +1,16 @@
 # chesspuz
 
-A dark-mode desktop chess puzzle trainer with a chess.com-style Survival mode: three lives, no clock, puzzles get harder the more you solve. Review every puzzle of a run move by move, explore alternatives, draw arrows and highlights, and compare runs on local leaderboards. Puzzles come from the free Lichess puzzle database, imported once into a local SQLite file and filtered by the 19 chess.com puzzle types.
+A dark-mode desktop chess puzzle trainer with a chess.com-style Survival mode: three lives (1-10 in Settings), no clock, puzzles get harder the more you solve. Review every puzzle of a run move by move, explore alternatives, draw arrows and highlights, and compare runs on local leaderboards. Puzzles come from the free Lichess puzzle database, imported once into a local SQLite file and filtered by the 19 chess.com puzzle types.
 
 First run: `python main.py import --download` (one-time, about 300 MB) builds the puzzle database in `%LOCALAPPDATA%/chesspuz`, or press "Rebuild puzzle database" in Settings.
 
 ## How to play
 - Home: pick a player name and the puzzle types, then Start Survival. Puzzles begin around rating 600 and climb 40 points per solved puzzle (adjustable in Settings). End run keeps the score.
-- Mistakes: the first wrong move on a puzzle costs a life, but the puzzle stays on the board. Keep trying, press Show solution to see the line, or Next to move on. Three lost lives end the run after the current puzzle. Every puzzle you got wrong lands on the Mistakes page, where Practise replays them with no lives or score until they are fixed.
+- Mistakes: the first wrong move on a puzzle costs a life, but the puzzle stays on the board. Keep trying, press Show solution to see the line, or Next to move on. Losing every life (three by default, 1-10 in Settings) ends the run after the current puzzle. Every puzzle you got wrong lands on the Mistakes page, where Practise replays them with no lives or score until they are fixed.
+- Pause: press Pause while solving. The clock stops and the whole page is covered until you press Resume (or Back on the phone); the pause does not count in the puzzle's time.
+- Leaderboard and Stats have a Lives filter (preset to your setting). A run played with more lives also counts on the boards for fewer lives, with the score it had when it lost that many: a 3-life run stands on the 1-life board with its score before the first mistake. History always shows final scores.
 - Sounds: clicks, piece moves, captures and a chime or buzz for right and wrong. Settings has Mute all and a volume slider per sound.
-- Settings (also reachable from a run): board and piece colours with a preview, text size, animation speed, the difficulty ramp, Clear stats per player, the Stockfish path and the database rebuild.
+- Settings (also reachable from a run): lives per run, board and piece colours with a preview, text size, animation speed, the difficulty ramp, Clear stats per player, the Stockfish path and the database rebuild.
 - Timer: the time on the current puzzle is shown for information only; each puzzle's time appears in the run overview, in Review and on the Played page.
 - Played: every attempt you made. Double-click any puzzle there, on Mistakes, or in the run overview to play it again in its own window (Show solution, Try again). The first attempt in a window counts as practice.
 - Board: click-click or drag to move, drop the king on its rook to castle, pick the piece when a pawn promotes. Right-drag draws an arrow, right-click highlights a square (Shift/Ctrl/Alt change the colour), any left click clears them.

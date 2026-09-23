@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from chesspuz import paths, sounds, themes
 from chesspuz.puzzle import Puzzle
 from chesspuz.puzzledb import PuzzleRepository
-from chesspuz.run import RampSettings
+from chesspuz.run import DEFAULT_LIVES, RampSettings, clamp_lives
 from chesspuz.ui import responsive, theme
 from chesspuz.ui.pieces import shared_pieces
 from chesspuz.userdb import UserDB
@@ -77,6 +77,10 @@ class AppContext:
 
     def animation_ms(self) -> int:
         return self.int_setting("animation_ms", 200)
+
+    def lives(self) -> int:
+        """Lives for the next Survival run (1-10, three by default)."""
+        return clamp_lives(self.int_setting("lives", DEFAULT_LIVES))
 
     def last_player(self) -> str:
         return self.setting("last_player", "")
@@ -258,7 +262,7 @@ class MainWindow(QMainWindow):
         if current is self.home:
             return False
         if current is self.run_page:
-            self.run_page.request_end()
+            self.run_page.request_end()  # resumes a paused run, else asks to end it
         elif current is self.settings:
             self.leave_settings()
         else:
@@ -322,7 +326,7 @@ class MainWindow(QMainWindow):
         player = self.ctx.users.get_or_create_player(player_name)
         self.ctx.remember_selection(player.name, types)
         run_id, run = self.ctx.users.new_run(
-            player.id, types, self.ctx.puzzles.pick, ramp=self.ctx.ramp()
+            player.id, types, self.ctx.puzzles.pick, ramp=self.ctx.ramp(), lives=self.ctx.lives()
         )
         self.stack.setCurrentWidget(self.run_page)
         self.run_page.start(run_id, run, player)

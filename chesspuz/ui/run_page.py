@@ -4,6 +4,9 @@ A wrong move costs a life the first time but the puzzle stays on the board: the 
 trying, press Show solution, or press Next. Solved puzzles move on by themselves after a moment.
 All timing goes through ``_later`` which stamps every callback with a generation number; leaving
 the page or starting the next puzzle bumps the generation, so stale timers never touch the board.
+
+Pause (while solving only, so no timer is pending): the clock stops and an opaque overlay with a
+Resume button covers the whole page, board included. The phone's Back key resumes.
 """
 
 from __future__ import annotations
@@ -13,6 +16,7 @@ from collections.abc import Callable
 
 import chess
 from PySide6.QtCore import Qt, QTimer, Signal
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QDialog,
     QDialogButtonBox,
@@ -75,6 +79,8 @@ class RunPage(QWidget):
         self.puzzle_number = 0  # 1-based, fixed when the puzzle starts
         self.record_streak = 0  # all-time best streak of this player
         self._started: float | None = None
+        self.paused = False
+        self._pause_started: float | None = None
         self._generation = 0
         self._phase = "idle"  # idle | opponent | solving | reply | playback | done | over
         self._playback: list[chess.Move] = []
@@ -85,6 +91,7 @@ class RunPage(QWidget):
 
         self.lives_label = QLabel()
         self.lives_label.setStyleSheet("font-size: 28px; color: #e57373;")
+        self.lives_label.setWordWrap(True)  # up to ten hearts
         self.score_label = QLabel("0")
         self.score_label.setStyleSheet("font-size: 40px; font-weight: bold;")
         self.score_caption = QLabel("score")
@@ -118,6 +125,11 @@ class RunPage(QWidget):
         self.next_button = QPushButton("Next")
         self.next_button.setObjectName("primary")
         self.next_button.clicked.connect(self._next_clicked)
+        self.pause_button = QPushButton("Pause")
+        self.pause_button.setToolTip("Stop the clock and hide the board until you resume")
+        self.pause_button.clicked.connect(self.pause)
+        self.overlay = PauseOverlay(self)
+        self.overlay.resume_requested.connect(self.resume)
         self.clear_button = QPushButton("Clear arrows")
         self.clear_button.clicked.connect(self.board.clear_annotations)
         self.clear_button.setVisible(not device.MOBILE)  # no right button on a touch screen
@@ -147,6 +159,7 @@ class RunPage(QWidget):
         actions = QHBoxLayout()
         actions.addWidget(self.solution_button)
         actions.addWidget(self.next_button)
+        actions.addWidget(self.pause_button)
         side.addLayout(actions)
         side.addSpacing(8)
         side.addWidget(QLabel("This run"))
@@ -161,7 +174,12 @@ class RunPage(QWidget):
 
         # board left + panel right, or board above a scrolling panel when taller than wide
         self.shape = BoardPanelLayout(self, self.board, panel, panel_width=300)
+        self.overlay.raise_()
         self._update_actions()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self.overlay.setGeometry(self.rect())  # the pause screen always covers the whole page
 
     # -- lifecycle -----------------------------------------------------------------------------
 
@@ -172,6 +190,7 @@ class RunPage(QWidget):
         self, run_id: int, run: SurvivalRun, player: Player, total: int | None = None
     ) -> None:
         self._generation += 1
+        self._clear_pause()
         self.run_id, self.run, self.player = run_id, run, player
         self.total_puzzles = total
         self.session = None
@@ -186,6 +205,7 @@ class RunPage(QWidget):
     def abort(self) -> None:
         """Quit the current run (window closing); the score so far still counts."""
         self._generation += 1
+        self._clear_pause()
         if self.run is not None and self.run_id is not None and not self.run.finished:
             self.run.quit()
             self.ctx.users.finish_run(self.run_id, self.run)
@@ -193,6 +213,60 @@ class RunPage(QWidget):
         self._ticker.stop()
         self.board.set_interactive(False)
         self._update_actions()
+
+    # -- pause ---------------------------------------------------------------------------------
+
+    @property
+    def can_pause(self) -> bool:
+        """Only while the player is solving: no timer is pending then, so nothing moves on."""
+        return self._phase == "solving" and self.run is not None and not self.paused
+
+    def pause(self) -> None:
+        """Stop the clock and cover the page until :meth:`resume`."""
+        if not self.can_pause:
+            return
+        assert self.run is not None
+        self.paused = True
+        self._pause_started = time.monotonic()
+        self.run.pause()
+        self._ticker.stop()
+        self.board.set_interactive(False)
+        self.overlay.summary.setText(self._pause_summary())
+        self.overlay.setGeometry(self.rect())
+        self.overlay.show()
+        self.overlay.raise_()
+        self.overlay.resume_button.setFocus()
+        self._update_actions()
+
+    def resume(self) -> None:
+        if not self.paused:
+            return
+        self.paused = False
+        if self.run is not None:
+            self.run.resume()
+        if self._started is not None and self._pause_started is not None:
+            self._started += time.monotonic() - self._pause_started  # the clock stood still
+        self._pause_started = None
+        self.overlay.hide()
+        if self._phase == "solving":
+            self.board.set_interactive(True)
+            self._ticker.start()
+        self._update_actions()
+
+    def _clear_pause(self) -> None:
+        """Drop a pause without restarting anything (new run, run over, window closing)."""
+        self.paused = False
+        self._pause_started = None
+        self.overlay.hide()
+
+    def _pause_summary(self) -> str:
+        assert self.run is not None
+        run = self.run
+        parts = [f"Puzzle {self.puzzle_number}", f"score {run.score}"]
+        if not run.practice:
+            noun = "life" if run.lives_left == 1 else "lives"
+            parts.append(f"{run.lives_left} of {run.lives} {noun} left")
+        return "  ·  ".join(parts)
 
     # -- puzzle flow ---------------------------------------------------------------------------
 
@@ -331,7 +405,7 @@ class RunPage(QWidget):
         self._update_actions()
 
     def _next_clicked(self) -> None:
-        if self.run is None:
+        if self.run is None or self.paused:
             return
         if self._phase in ("solving", "done", "playback") and self.run.settled:
             self._generation += 1
@@ -389,9 +463,10 @@ class RunPage(QWidget):
 
     def _update_actions(self) -> None:
         run, session = self.run, self.session
-        solving = self._phase == "solving" and session is not None
+        solving = self._phase == "solving" and session is not None and not self.paused
         self.solution_button.setEnabled(solving)
-        can_advance = run is not None and session is not None and run.settled
+        self.pause_button.setEnabled(self.can_pause)
+        can_advance = run is not None and session is not None and run.settled and not self.paused
         self.next_button.setEnabled(can_advance and self._phase in ("solving", "done", "playback"))
 
     def _set_banner(self, text: str, tone: str) -> None:
@@ -403,7 +478,10 @@ class RunPage(QWidget):
     # -- ending --------------------------------------------------------------------------------
 
     def request_end(self) -> None:
-        """Leave the page the way the End run button does (asks first while a run is on)."""
+        """The phone's Back key: resume a paused run, else leave the page the way End run does."""
+        if self.paused:
+            self.resume()
+            return
         self._end_run_clicked()
 
     def _end_run_clicked(self) -> None:
@@ -424,13 +502,14 @@ class RunPage(QWidget):
 
     def _game_over(self) -> None:
         assert self.run is not None and self.run_id is not None and self.player is not None
+        self._clear_pause()
         self._phase = "over"
         self._ticker.stop()
         self.board.set_interactive(False)
         if self.run.ended_by is None:
             self.run.quit()
         self.ctx.users.finish_run(self.run_id, self.run)
-        best = self.ctx.users.best_score(self.player.id, self.run.types)
+        best = self.ctx.users.best_score(self.player.id, self.run.types, lives=self.run.lives)
         self.record_streak = max(self.record_streak, self.run.best_streak)
         self._update_panel()
         self._update_actions()
@@ -446,6 +525,39 @@ class RunPage(QWidget):
             self.mistakes_requested.emit()
         else:
             self.home_requested.emit()
+
+
+class PauseOverlay(QWidget):
+    """Covers the whole run page while paused: nothing to study, nothing to press but Resume."""
+
+    resume_requested = Signal()
+
+    def __init__(self, parent: QWidget) -> None:
+        super().__init__(parent)
+        self.setAutoFillBackground(True)  # opaque: the board underneath must not show through
+        palette = self.palette()
+        palette.setColor(QPalette.ColorRole.Window, theme.WINDOW)
+        self.setPalette(palette)
+        self.title = QLabel("Paused")
+        self.title.setObjectName("title")
+        self.title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.summary = QLabel()
+        self.summary.setObjectName("muted")
+        self.summary.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.summary.setWordWrap(True)
+        self.resume_button = QPushButton("Resume")
+        self.resume_button.setObjectName("primary")
+        self.resume_button.setMinimumSize(200, 48)
+        self.resume_button.clicked.connect(self.resume_requested.emit)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 24, 24, 24)
+        layout.addStretch()
+        layout.addWidget(self.title)
+        layout.addWidget(self.summary)
+        layout.addSpacing(16)
+        layout.addWidget(self.resume_button, alignment=Qt.AlignmentFlag.AlignHCenter)
+        layout.addStretch()
+        self.hide()
 
 
 class GameOverDialog(QDialog):
@@ -468,8 +580,9 @@ class GameOverDialog(QDialog):
             self.setWindowTitle("Run over")
             headline = QLabel("Out of lives!" if run.ended_by == "lives" else "Run ended")
             score = QLabel(f"Score {run.score}")
+            noun = "life" if run.lives == 1 else "lives"
             details = QLabel(
-                f"Best with these types: {best}\n"
+                f"Best with these types and {run.lives} {noun}: {best}\n"
                 f"Highest rating solved: {run.max_rating_solved or '-'}\n"
                 f"Best streak: {run.best_streak} "
                 f"(your record: {max(record_streak, run.best_streak)})"

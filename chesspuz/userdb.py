@@ -16,9 +16,16 @@ from pathlib import Path
 
 from chesspuz import themes
 from chesspuz.puzzle import Puzzle
-from chesspuz.run import PickFn, PuzzleResult, RampSettings, SurvivalRun, queue_pick
+from chesspuz.run import (
+    DEFAULT_LIVES,
+    PickFn,
+    PuzzleResult,
+    RampSettings,
+    SurvivalRun,
+    queue_pick,
+)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS players (
@@ -39,7 +46,8 @@ CREATE TABLE IF NOT EXISTS runs (
     step INTEGER NOT NULL,
     max_rating_solved INTEGER NOT NULL DEFAULT 0,
     total_ms INTEGER NOT NULL DEFAULT 0,
-    mode TEXT NOT NULL DEFAULT 'survival'
+    mode TEXT NOT NULL DEFAULT 'survival',
+    lives INTEGER NOT NULL DEFAULT 3
 );
 CREATE INDEX IF NOT EXISTS idx_runs_player ON runs(player_id, status);
 CREATE TABLE IF NOT EXISTS run_puzzles (
@@ -102,6 +110,7 @@ class RunRecord:
     total_ms: int
     puzzles_played: int
     mode: str = SURVIVAL
+    lives: int = DEFAULT_LIVES  # 0 for practice
 
     @property
     def scored(self) -> bool:
@@ -191,9 +200,14 @@ class UserDB:
             row = conn.execute("SELECT version FROM schema_version").fetchone()
             if row is None:
                 conn.execute("INSERT INTO schema_version VALUES (?)", (SCHEMA_VERSION,))
-            elif row[0] < 2:
-                conn.execute("ALTER TABLE runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'survival'")
-                conn.execute("UPDATE schema_version SET version = 2")
+            elif row[0] < SCHEMA_VERSION:
+                if row[0] < 2:
+                    conn.execute(
+                        "ALTER TABLE runs ADD COLUMN mode TEXT NOT NULL DEFAULT 'survival'"
+                    )
+                if row[0] < 3:  # every earlier run was played with three lives
+                    conn.execute("ALTER TABLE runs ADD COLUMN lives INTEGER NOT NULL DEFAULT 3")
+                conn.execute("UPDATE schema_version SET version = ?", (SCHEMA_VERSION,))
         self.conn = conn
         self.abandon_active_runs()
         return self
@@ -253,13 +267,27 @@ class UserDB:
     # -- run lifecycle -------------------------------------------------------------------------
 
     def start_run(
-        self, player_id: int, types: Collection[str], ramp: RampSettings, mode: str = SURVIVAL
+        self,
+        player_id: int,
+        types: Collection[str],
+        ramp: RampSettings,
+        mode: str = SURVIVAL,
+        lives: int = DEFAULT_LIVES,
     ) -> int:
         with self._db:
             cursor = self._db.execute(
                 "INSERT INTO runs (player_id, started_at, status, types_json, start_rating, step,"
-                " mode) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (player_id, _now(), ACTIVE, _types_json(types), ramp.start, ramp.step, mode),
+                " mode, lives) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    player_id,
+                    _now(),
+                    ACTIVE,
+                    _types_json(types),
+                    ramp.start,
+                    ramp.step,
+                    mode,
+                    lives,
+                ),
             )
         return int(cursor.lastrowid or 0)
 
@@ -332,18 +360,21 @@ class UserDB:
         ramp: RampSettings | None = None,
         clock: Callable[[], float] | None = None,
         mode: str = SURVIVAL,
+        lives: int = DEFAULT_LIVES,
     ) -> tuple[int, SurvivalRun]:
         """Start a persisted run: unseen puzzles are preferred and every result is saved."""
         ramp = ramp or RampSettings()
-        run_id = self.start_run(player_id, types, ramp, mode)
+        practice = mode == PRACTICE
+        run_id = self.start_run(player_id, types, ramp, mode, lives=0 if practice else lives)
         kwargs = {} if clock is None else {"clock": clock}
         run = SurvivalRun(
             types,
             pick,
             ramp=ramp,
+            lives=lives,
             seen=self.seen_puzzle_ids(player_id),
             on_result=lambda result: self.record_puzzle(run_id, result),
-            practice=(mode == PRACTICE),
+            practice=practice,
             **kwargs,
         )
         return run_id, run
@@ -365,6 +396,38 @@ class UserDB:
         " (SELECT COUNT(*) FROM run_puzzles rp WHERE rp.run_id = r.id) AS puzzles_played"
         " FROM runs r JOIN players p ON p.id = r.player_id"
     )
+    # The same rows, scored as a run with fewer lives would have been: ``score_at`` is the
+    # number of puzzles solved before the k-th mistake and ``time_at`` the time spent up to and
+    # including it (first parameter: k - 1). A run that never lost k lives keeps its final
+    # score. A 3-life run therefore also stands on the 1- and 2-life boards.
+    _RUN_AT_SELECT = (
+        "WITH cut AS (SELECT r.id AS run_id, (SELECT f.seq FROM run_puzzles f"
+        " WHERE f.run_id = r.id AND f.result = 'failed' ORDER BY f.seq LIMIT 1 OFFSET ?)"
+        " AS seq FROM runs r)"
+        " SELECT r.*, p.name AS player_name,"
+        " (SELECT COUNT(*) FROM run_puzzles rp WHERE rp.run_id = r.id) AS puzzles_played,"
+        " (SELECT COUNT(*) FROM run_puzzles rp WHERE rp.run_id = r.id AND rp.result = 'solved'"
+        " AND (cut.seq IS NULL OR rp.seq < cut.seq)) AS score_at,"
+        " (SELECT COALESCE(SUM(rp.solve_ms), 0) FROM run_puzzles rp WHERE rp.run_id = r.id"
+        " AND (cut.seq IS NULL OR rp.seq <= cut.seq)) AS time_at"
+        " FROM runs r JOIN players p ON p.id = r.player_id JOIN cut ON cut.run_id = r.id"
+    )
+
+    @staticmethod
+    def _scored_where(types: Collection[str] | None, player_id: int | None, lives: int | None):
+        """WHERE clauses for scored Survival runs; ``lives`` keeps runs with at least that many."""
+        where = [f"r.status IN ({','.join('?' * len(SCORED_STATUSES))})", "r.mode = ?"]
+        params: list[object] = [*SCORED_STATUSES, SURVIVAL]
+        if types is not None:
+            where.append("r.types_json = ?")
+            params.append(_types_json(types))
+        if player_id is not None:
+            where.append("r.player_id = ?")
+            params.append(player_id)
+        if lives is not None:
+            where.append("r.lives >= ?")
+            params.append(lives)
+        return " WHERE " + " AND ".join(where), params
 
     def run(self, run_id: int) -> RunRecord | None:
         row = self._db.execute(self._RUN_SELECT + " WHERE r.id = ?", (run_id,)).fetchone()
@@ -381,32 +444,32 @@ class UserDB:
         types: Collection[str] | None = None,
         player_id: int | None = None,
         limit: int = 20,
+        lives: int | None = None,
     ) -> list[RunRecord]:
-        """Best scored Survival runs: score desc, then less time. ``types`` = exact type set."""
-        where = [f"r.status IN ({','.join('?' * len(SCORED_STATUSES))})", "r.mode = ?"]
-        params: list[object] = [*SCORED_STATUSES, SURVIVAL]
-        if types is not None:
-            where.append("r.types_json = ?")
-            params.append(_types_json(types))
-        if player_id is not None:
-            where.append("r.player_id = ?")
-            params.append(player_id)
-        params.append(limit)
-        rows = self._db.execute(
-            self._RUN_SELECT
-            + " WHERE "
-            + " AND ".join(where)
-            + " ORDER BY r.score DESC, r.total_ms ASC, r.id ASC LIMIT ?",
-            params,
-        ).fetchall()
+        """Best scored Survival runs: score desc, then less time. ``types`` = exact type set.
+
+        With ``lives`` the board is the one for runs of that many lives: every run played with
+        at least that many counts with the score it had when it lost its ``lives``-th life
+        (see ``_RUN_AT_SELECT``); the records come back with that score and time.
+        """
+        where, params = self._scored_where(types, player_id, lives)
+        if lives is None:
+            sql = self._RUN_SELECT + where + " ORDER BY r.score DESC, r.total_ms ASC, r.id ASC"
+        else:
+            sql = self._RUN_AT_SELECT + where + " ORDER BY score_at DESC, time_at ASC, r.id ASC"
+            params.insert(0, lives - 1)
+        rows = self._db.execute(sql + " LIMIT ?", [*params, limit]).fetchall()
         return [_to_run(row) for row in rows]
 
-    def best_score(self, player_id: int, types: Collection[str]) -> int:
-        row = self._db.execute(
-            "SELECT MAX(score) FROM runs WHERE player_id = ? AND types_json = ? AND mode = ?"
-            f" AND status IN ({','.join('?' * len(SCORED_STATUSES))})",
-            (player_id, _types_json(types), SURVIVAL, *SCORED_STATUSES),
-        ).fetchone()
+    def best_score(self, player_id: int, types: Collection[str], lives: int | None = None) -> int:
+        """Best score with exactly ``types``; with ``lives``, on the board for that many lives."""
+        where, params = self._scored_where(types, player_id, lives)
+        if lives is None:
+            sql = "SELECT MAX(r.score) FROM runs r" + where
+        else:
+            sql = f"SELECT MAX(score_at) FROM ({self._RUN_AT_SELECT}{where})"
+            params.insert(0, lives - 1)
+        row = self._db.execute(sql, params).fetchone()
         return int(row[0] or 0)
 
     def history(self, player_id: int | None = None, limit: int = 100) -> list[RunRecord]:
@@ -433,18 +496,26 @@ class UserDB:
         ).fetchall()
         return [tuple(json.loads(row["types_json"])) for row in rows]
 
-    def summary(self, player_id: int | None = None) -> dict[str, float]:
-        """Runs played, best and average score, puzzles attempted and solved."""
-        where = f"status IN ({','.join('?' * len(SCORED_STATUSES))}) AND mode = ?"
-        params: list[object] = [*SCORED_STATUSES, SURVIVAL]
-        if player_id is not None:
-            where += " AND player_id = ?"
-            params.append(player_id)
-        row = self._db.execute(
-            f"SELECT COUNT(*) AS runs, COALESCE(MAX(score), 0) AS best,"
-            f" COALESCE(AVG(score), 0) AS avg FROM runs WHERE {where}",
-            params,
-        ).fetchone()
+    def summary(self, player_id: int | None = None, lives: int | None = None) -> dict[str, float]:
+        """Runs played, best and average score, puzzles attempted and solved.
+
+        With ``lives`` the runs, best and average are those of the board for that many lives
+        (runs with at least that many lives, scored at their ``lives``-th mistake); the puzzle
+        counts cover every Survival puzzle regardless.
+        """
+        where, params = self._scored_where(None, player_id, lives)
+        if lives is None:
+            sql = (
+                "SELECT COUNT(*) AS runs, COALESCE(MAX(r.score), 0) AS best,"
+                " COALESCE(AVG(r.score), 0) AS avg FROM runs r" + where
+            )
+        else:
+            sql = (
+                "SELECT COUNT(*) AS runs, COALESCE(MAX(score_at), 0) AS best,"
+                f" COALESCE(AVG(score_at), 0) AS avg FROM ({self._RUN_AT_SELECT}{where})"
+            )
+            params.insert(0, lives - 1)
+        row = self._db.execute(sql, params).fetchone()
         puzzle_where = "r.mode = ?"
         puzzle_params: list[object] = [SURVIVAL]
         if player_id is not None:
@@ -581,6 +652,8 @@ class UserDB:
 
 
 def _to_run(row: sqlite3.Row) -> RunRecord:
+    keys = row.keys()
+    at_board = "score_at" in keys  # scored as on the board for fewer lives
     return RunRecord(
         id=row["id"],
         player_id=row["player_id"],
@@ -588,15 +661,16 @@ def _to_run(row: sqlite3.Row) -> RunRecord:
         started_at=row["started_at"],
         ended_at=row["ended_at"],
         status=row["status"],
-        score=row["score"],
+        score=row["score_at"] if at_board else row["score"],
         lives_lost=row["lives_lost"],
         types=tuple(json.loads(row["types_json"])),
         start_rating=row["start_rating"],
         step=row["step"],
         max_rating_solved=row["max_rating_solved"],
-        total_ms=row["total_ms"],
+        total_ms=row["time_at"] if at_board else row["total_ms"],
         puzzles_played=row["puzzles_played"],
         mode=row["mode"],
+        lives=row["lives"],
     )
 
 

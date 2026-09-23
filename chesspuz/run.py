@@ -1,4 +1,4 @@
-"""Survival run: three lives, rising difficulty, no clock. Headless and Qt-free.
+"""Survival run: a few lives (three by default), rising difficulty, no clock. Headless, Qt-free.
 
 The run owns the difficulty ramp and the lives/score bookkeeping. It gets puzzles through a
 ``pick`` callable so it works against the real puzzle database or a fake in tests, and reports
@@ -7,6 +7,7 @@ each finished puzzle through an optional ``on_result`` callback so storage can p
 A puzzle is recorded exactly once: at its first mistake (a life is lost) or at a clean solve (a
 point is scored). After a mistake the player may keep trying for free; solving it then earns
 nothing. Practice mode never loses lives and ends when the pick callable runs out of puzzles.
+A run can be paused: the solve clock stands still until it is resumed.
 """
 
 from __future__ import annotations
@@ -21,6 +22,13 @@ from chesspuz.puzzle import Puzzle
 from chesspuz.session import Outcome, PuzzleSession, Status
 
 DEFAULT_LIVES = 3
+MIN_LIVES = 1
+MAX_LIVES = 10
+
+
+def clamp_lives(value: int) -> int:
+    """The number of lives a Survival run may have (the setting is user input)."""
+    return max(MIN_LIVES, min(MAX_LIVES, int(value)))
 
 
 class NoPuzzles(RuntimeError):
@@ -117,6 +125,7 @@ class SurvivalRun:
         self.ended_by: str | None = None  # "lives", "quit" or "done" (practice queue empty)
         self._target = 0
         self._started_at: float | None = None
+        self._paused_at: float | None = None
 
     # -- queries -------------------------------------------------------------------------------
 
@@ -140,6 +149,10 @@ class SurvivalRun:
         if self.session is None:
             return True
         return self.session.status is not Status.PLAYING or self.session.failed
+
+    @property
+    def paused(self) -> bool:
+        return self._paused_at is not None
 
     # -- transitions ---------------------------------------------------------------------------
 
@@ -171,6 +184,22 @@ class SurvivalRun:
     def mark_started(self) -> None:
         """Restart the solve timer, e.g. once the opponent's move animation has finished."""
         self._started_at = self.clock()
+        self._paused_at = None
+
+    def pause(self) -> None:
+        """Stop the solve clock; the puzzle stays where it is until :meth:`resume`."""
+        if self._paused_at is None:
+            self._paused_at = self.clock()
+
+    def resume(self) -> float:
+        """Restart the solve clock; returns how long the pause lasted in seconds."""
+        if self._paused_at is None:
+            return 0.0
+        paused_for = max(0.0, self.clock() - self._paused_at)
+        if self._started_at is not None:
+            self._started_at += paused_for  # the pause does not count as solving time
+        self._paused_at = None
+        return paused_for
 
     def try_move(self, move: chess.Move) -> Outcome:
         """Play a move on the current puzzle; allowed even after the run is over (practice)."""
@@ -212,8 +241,9 @@ class SurvivalRun:
 
     def _finish(self, *, solved: bool) -> None:
         assert self.session is not None
-        started = self._started_at if self._started_at is not None else self.clock()
-        solve_ms = max(0, int((self.clock() - started) * 1000))
+        now = self._paused_at if self._paused_at is not None else self.clock()
+        started = self._started_at if self._started_at is not None else now
+        solve_ms = max(0, int((now - started) * 1000))
         self.total_ms += solve_ms
         puzzle = self.session.puzzle
         result = PuzzleResult(

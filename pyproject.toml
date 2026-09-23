@@ -1,6 +1,6 @@
 [project]
 name = "chesspuz"
-version = "0.2.0"
+version = "0.3.0"
 description = "Dark-mode chess puzzle trainer with a chess.com-style Survival mode on the Lichess puzzle database"
 readme = "README.md"
 requires-python = ">=3.12"

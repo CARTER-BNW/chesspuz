@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from chesspuz import themes
+from chesspuz.run import MAX_LIVES, MIN_LIVES
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.responsive import CompactWatcher
 from chesspuz.userdb import RunRecord
@@ -28,6 +29,23 @@ RUN_ID_ROLE = Qt.ItemDataRole.UserRole
 WRONG_ROLE_COLOR = QColor("#e57373")
 ALL_PLAYERS = "All players"
 ANY_TYPES = "Any type selection"
+ANY_LIVES = "Any lives"
+
+
+def lives_label(lives: int) -> str:
+    return "1 life" if lives == 1 else f"{lives} lives"
+
+
+def fill_lives_box(box: QComboBox, current: int) -> None:
+    """Any lives, then 1-10; selects ``current`` (the Lives setting) the first time only."""
+    chosen = box.currentData() if box.count() else current
+    box.blockSignals(True)
+    box.clear()
+    box.addItem(ANY_LIVES, None)
+    for lives in range(MIN_LIVES, MAX_LIVES + 1):
+        box.addItem(lives_label(lives), lives)
+    box.setCurrentIndex(0 if chosen is None else max(0, box.findData(chosen)))
+    box.blockSignals(False)
 
 
 def type_set_label(types: tuple[str, ...]) -> str:
@@ -53,6 +71,11 @@ def _table(headers: list[str]) -> QTableWidget:
     table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.ResizeToContents)
     table.setAlternatingRowColors(True)
     return table
+
+
+def _lives(run: RunRecord) -> str:
+    """Lives the run started with; practice sessions have none."""
+    return str(run.lives) if run.lives else "-"
 
 
 def _cell(text: str, run_id: int, align_right: bool = False) -> QTableWidgetItem:
@@ -81,18 +104,31 @@ class LeaderboardPage(QWidget):
             QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
         )
         self.types_box.setMinimumContentsLength(12)
-        self.player_box.currentIndexChanged.connect(self._fill_tables)
-        self.types_box.currentIndexChanged.connect(self._fill_tables)
+        self.lives_box = QComboBox()
+        self.lives_box.setToolTip(
+            "Best runs for that many lives. A run played with more lives counts with the score "
+            "it had when it lost that many."
+        )
+        for box in (self.player_box, self.types_box, self.lives_box):
+            box.currentIndexChanged.connect(self._fill_tables)
         filters = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         filters.addWidget(QLabel("Player"))
         filters.addWidget(self.player_box)
         filters.addSpacing(16)
         filters.addWidget(QLabel("Types"))
         filters.addWidget(self.types_box, 1)
+        # its own row: a third box on the first one would push the page's wide-shape minimum
+        # past the compact threshold, and the page could then never shrink into the phone shape
+        lives_row = QHBoxLayout()
+        lives_row.addWidget(QLabel("Lives"))
+        lives_row.addWidget(self.lives_box)
+        lives_row.addStretch()
 
-        self.board_table = _table(["#", "Player", "Score", "Best rating", "Time", "Date", "Types"])
+        self.board_table = _table(
+            ["#", "Player", "Score", "Lives", "Best rating", "Time", "Date", "Types"]
+        )
         self.history_table = _table(
-            ["Date", "Player", "Status", "Score", "Puzzles", "Best rating", "Types"]
+            ["Date", "Player", "Status", "Score", "Lives", "Puzzles", "Best rating", "Types"]
         )
         for table in (self.board_table, self.history_table):
             table.itemDoubleClicked.connect(self._open_run)
@@ -101,7 +137,10 @@ class LeaderboardPage(QWidget):
         self.tabs.addTab(self.board_table, "Best runs")
         self.tabs.addTab(self.history_table, "History")
 
-        self.hint = QLabel("Double-click a run to review it.")
+        self.hint = QLabel(
+            "Double-click a run to review it. Lives: a run played with more lives counts with "
+            "its score at that many mistakes; History shows final scores."
+        )
         self.hint.setObjectName("muted")
         self.hint.setWordWrap(True)
         home = QPushButton("Home")
@@ -115,6 +154,7 @@ class LeaderboardPage(QWidget):
         self.shape = CompactWatcher(self, layout, stack=[filters])
         layout.addWidget(title)
         layout.addLayout(filters)
+        layout.addLayout(lives_row)
         layout.addWidget(self.tabs, 1)
         layout.addLayout(bottom)
 
@@ -140,6 +180,7 @@ class LeaderboardPage(QWidget):
         self.types_box.setCurrentIndex(max(0, min(types_index, self.types_box.count() - 1)))
         for box in (self.player_box, self.types_box):
             box.blockSignals(False)
+        fill_lives_box(self.lives_box, self.ctx.lives())
         self._fill_tables()
 
     def _selected_player_id(self) -> int | None:
@@ -157,10 +198,15 @@ class LeaderboardPage(QWidget):
             return self._type_sets[index]
         return None
 
+    def selected_lives(self) -> int | None:
+        return self.lives_box.currentData()
+
     def _fill_tables(self, *_args: object) -> None:
         player_id = self._selected_player_id()
         types = self._selected_types()
-        best = self.ctx.users.leaderboard(types=types, player_id=player_id, limit=50)
+        best = self.ctx.users.leaderboard(
+            types=types, player_id=player_id, limit=50, lives=self.selected_lives()
+        )
         self.board_table.setRowCount(0)
         for rank, run in enumerate(best, start=1):
             self._add_board_row(rank, run)
@@ -180,6 +226,7 @@ class LeaderboardPage(QWidget):
             _cell(str(rank), run.id, True),
             _cell(run.player_name, run.id),
             _cell(str(run.score), run.id, True),
+            _cell(_lives(run), run.id, True),
             _cell(str(run.max_rating_solved or "-"), run.id, True),
             _cell(format_ms(run.total_ms), run.id, True),
             _cell(run.started_at.replace("T", " ")[:16], run.id),
@@ -196,6 +243,7 @@ class LeaderboardPage(QWidget):
             _cell(run.player_name, run.id),
             _cell(run.status, run.id),
             _cell(str(run.score), run.id, True),
+            _cell(_lives(run), run.id, True),
             _cell(str(run.puzzles_played), run.id, True),
             _cell(str(run.max_rating_solved or "-"), run.id, True),
             _cell(type_set_label(run.types), run.id),

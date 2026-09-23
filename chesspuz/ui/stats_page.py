@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from chesspuz.ui.app import AppContext
+from chesspuz.ui.leaderboard_page import fill_lives_box
 from chesspuz.ui.responsive import CompactWatcher
 
 ALL_PLAYERS = "All players"
@@ -32,10 +33,20 @@ class StatsPage(QWidget):
         title.setObjectName("title")
         self.player_box = QComboBox()
         self.player_box.currentIndexChanged.connect(self._fill)
-        filters = QHBoxLayout()
+        self.lives_box = QComboBox()
+        self.lives_box.setToolTip(
+            "Runs, best and average score for that many lives. A run played with more lives "
+            "counts with the score it had when it lost that many."
+        )
+        self.lives_box.currentIndexChanged.connect(self._fill)
+        filters = QHBoxLayout()  # one box per row: the phone is 412 px wide
         filters.addWidget(QLabel("Player"))
         filters.addWidget(self.player_box)
         filters.addStretch()
+        lives_row = QHBoxLayout()
+        lives_row.addWidget(QLabel("Lives"))
+        lives_row.addWidget(self.lives_box)
+        lives_row.addStretch()
 
         self.summary = QLabel()
         self.summary.setObjectName("big")
@@ -61,6 +72,7 @@ class StatsPage(QWidget):
         self.shape = CompactWatcher(self, layout)
         layout.addWidget(title)
         layout.addLayout(filters)
+        layout.addLayout(lives_row)
         layout.addWidget(self.summary)
         layout.addWidget(self.table, 1)
         layout.addLayout(bottom)
@@ -75,6 +87,7 @@ class StatsPage(QWidget):
         if current:
             self.player_box.setCurrentText(current)
         self.player_box.blockSignals(False)
+        fill_lives_box(self.lives_box, self.ctx.lives())
         self._fill()
 
     def _player_id(self) -> int | None:
@@ -84,9 +97,12 @@ class StatsPage(QWidget):
                 return player.id
         return None
 
+    def selected_lives(self) -> int | None:
+        return self.lives_box.currentData()
+
     def _fill(self, *_args: object) -> None:
         player_id = self._player_id()
-        totals = self.ctx.users.summary(player_id)
+        totals = self.ctx.users.summary(player_id, lives=self.selected_lives())
         self.summary.setText(
             f"{totals['runs']} runs  -  best score {totals['best_score']}  -  "
             f"average {totals['average_score']:.1f}  -  "

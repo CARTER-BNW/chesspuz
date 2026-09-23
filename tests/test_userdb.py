@@ -4,7 +4,15 @@ import chess
 import pytest
 
 from chesspuz.run import RampSettings
-from chesspuz.userdb import ABANDONED, FINISHED, PRACTICE, QUIT, SURVIVAL, UserDB
+from chesspuz.userdb import (
+    ABANDONED,
+    FINISHED,
+    PRACTICE,
+    QUIT,
+    SCHEMA_VERSION,
+    SURVIVAL,
+    UserDB,
+)
 from tests import puzzles
 from tests.test_run import FakeClock, FakePool
 
@@ -195,12 +203,12 @@ def test_schema_v1_databases_are_migrated(tmp_path: Path) -> None:
     conn.executescript(V1_SCHEMA)
     conn.close()
     with UserDB(path) as db:
-        assert db._db.execute("SELECT version FROM schema_version").fetchone()[0] == 2
+        assert db._db.execute("SELECT version FROM schema_version").fetchone()[0] == SCHEMA_VERSION
         record = db.run(7)
-        assert record.mode == SURVIVAL and record.score == 4
+        assert record.mode == SURVIVAL and record.score == 4 and record.lives == 3
         assert db.leaderboard()[0].id == 7
     with UserDB(path) as db:  # opening again must not migrate twice
-        assert db.run(7).mode == SURVIVAL
+        assert db.run(7).mode == SURVIVAL and db.run(7).lives == 3
 
 
 def test_practice_runs_stay_off_the_leaderboard_and_feed_the_mistakes_list(db: UserDB) -> None:
