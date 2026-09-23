@@ -89,8 +89,9 @@ Outcome: the app plays on the phone from an APK built with one command. Spec: do
 - [x] Puzzle database bundled in the APK, user data in the app's private files dir
 - [x] Tests for the portrait layout, the Back key, the entry and the spec patcher; offscreen screenshots at 412x915 checked
 - [x] APK builds: `android/bin/chesspuz-<version>-arm64-v8a-debug.apk` (about 200 MB; first build 9 min, later builds 1-2 min)
-- [ ] Installed and play-tested on the Pixel 9a (phone was away during the build session)
-- [ ] Later: trim unused Qt libraries from the APK (the deploy recipe copies every Qt module), sounds on the phone
+- [x] Installed on the Pixel 9a: starts in portrait with the full database, scrolls by finger, a run starts, Back reaches the app (python-for-android's "click again to close" Java patched out)
+- [ ] Play-tested by John: a whole Survival run, review, mistakes practice, settings
+- [ ] Later: trim unused Qt libraries from the APK (removes Android's 16 KB compatibility warning on debug installs and most of the size), sounds on the phone
 Done when: `python android\sync.py all` installs the APK and a Survival run plays through in portrait on the phone.
 
 ## Decisions

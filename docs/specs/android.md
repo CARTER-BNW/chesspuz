@@ -20,9 +20,16 @@ statistics as the desktop app. The desktop code stays the master; the phone gets
 - **Phone flag** (`chesspuz.ui.device.MOBILE`, from `CHESSPUZ_MOBILE=1` set by the entry): no
   window sizing, 14 pt base text (1 pt = 1 dp on Android), finger-sized controls in the
   stylesheet, and the desktop-only settings (engine executable, database rebuild) hidden.
-- **Back key**: never quits. It closes a puzzle window, asks to end a running run, leaves
-  Settings, or returns to the home page. The manifest disables predictive back (targetSdk 36)
-  so the key reaches Qt at all.
+- **Back key**: never quits. It closes a puzzle window (and cancels dialogs), asks to end a
+  running run, leaves Settings, or returns to the home page. The manifest disables predictive
+  back (targetSdk 36) so the key reaches Qt at all, and python-for-android's Qt bootstrap
+  activity is patched at build time: its own "click again to close the app" rule would swallow
+  every first press.
+- **Window size**: Android sizes the window to the screen; the pages are put into portrait
+  shape from the screen size before the window is shown, because their desktop shape has a
+  minimum width (board plus side panel) that would clamp the window wider than the screen.
+- **Touch**: finger drags scroll every scroll area, table and list (QScroller); scrollbars are
+  hidden on the phone.
 - **Data**: the puzzle database (109 MB, read-only) travels inside the APK and is opened in
   place from the unpacked app folder; players, runs and settings live in
   `/data/data/org.johncarter.chesspuz/files/chesspuz/user.sqlite`, which survives updates.
@@ -37,6 +44,7 @@ run -> logcat dump. Details and the toolchain versions: `android/README.md`.
 
 ## Done when
 - [x] `python android\sync.py build` produces `android/bin/chesspuz-<version>-arm64-v8a-debug.apk`
-- [ ] the APK installs on the Pixel 9a and a Survival run plays through, portrait, with the
-      full database; Back behaves as above
+- [x] the APK installs on the Pixel 9a and starts a Survival run in portrait with the full
+      database; Back behaves as above (2026-09-23, checked over adb)
+- [ ] a whole run, review and practice play-tested by hand on the phone
 - [x] `python -m pytest -q` covers the portrait layout, the Back key, the entry and the patcher

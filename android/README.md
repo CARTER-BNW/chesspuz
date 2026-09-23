@@ -12,7 +12,7 @@ master: `sync.py` copies it in. Spec and design decisions: `docs/specs/android.m
 | `app/` | generated | the synced copy: `chesspuz/`, `mobile/`, `main.py` stub, `puzzles.sqlite`, `icon.png` (gitignored) |
 | `VERSION`, `icon.png`, `manifest_application_args.xml` | this folder | version (bumped on every sync), launcher icon, manifest attribute for the Back key |
 | `wsl/setup.sh` | this folder | one-time toolchain in the WSL box (idempotent) |
-| `wsl/build.sh`, `wsl/patch_spec.py`, `wsl/p4a_pin.txt` | this folder | the build inside the box: generate the buildozer project once, patch it, build |
+| `wsl/build.sh`, `wsl/patch_spec.py`, `wsl/patch_java.py`, `wsl/p4a_pin.txt` | this folder | the build inside the box: generate the buildozer project once, patch the spec and the bootstrap's Back-key Java, build |
 | `dd-android` | `D:\WSL\dd-android` | Ubuntu 24.04 WSL distro shared with Digit Defender: buildozer, JDK 17, Android SDK (API 36, build-tools 37), NDK r28c, plus `~/chesspuz-venv` (Python 3.11 + PySide6 6.11.2 host tools), `~/wheels` (Qt Android wheels), `~/chesspuz-android` (build dir) |
 | `bin/*.apk`, `build.log` | this folder | outputs (gitignored) |
 | adb | `D:\Android\sdk\platform-tools\adb.exe` | install / run / logcat (override with the `ADB` env var) |
@@ -31,10 +31,13 @@ for arm64) took 9 minutes on this machine.
      scans the code for the Qt modules used (Core, Gui, Svg, Widgets), writes the PySide6 and
      shiboken6 python-for-android recipes and the Qt `.jar` files into `app/deployment/`, and
      creates `buildozer.spec`;
+   - python-for-android is our own checkout `~/p4a-chesspuz` at commit `3762c88c` (its last
+     revision that builds CPython 3.11), set as `p4a.source_dir`: buildozer then runs no git
+     commands on it, so `patch_java.py` can rewrite the Qt bootstrap's `PythonActivity.java`,
+     which otherwise swallows the first Back press ("Click again to close the app");
    - `patch_spec.py` applies our settings to that spec: package `org.johncarter.chesspuz`,
      version, `requirements` + `sqlite3,chess`, `.sqlite` files included, portrait, fullscreen,
-     API 36 / min 28, sources kept as `.py`, the Back-key manifest attribute, and
-     python-for-android pinned to commit `3762c88c` (its last revision that builds CPython 3.11);
+     API 36 / min 28, sources kept as `.py`, the Back-key manifest attribute, the p4a checkout;
    - `buildozer android debug` builds `bin/chesspuz-<version>-arm64-v8a-debug.apk`.
 3. `install` / `run` / `logs` use adb (package `org.johncarter.chesspuz`, activity
    `org.kivy.android.PythonActivity`).
@@ -48,9 +51,15 @@ copies every Qt library from the wheel, used or not, so the debug APK is about 2
 database is 40 MB of that); trimming the unused Qt modules is a future optimisation.
 
 ## On the phone
-- The app starts in portrait: the board spans the width, the panel below scrolls. The layout is
-  decided from the window size, so `python android\app\main.py --desktop` shows the same thing
-  in a 412x915 window on the PC (after a sync).
+- The app starts in portrait: the board spans the width, the panel below scrolls with a finger
+  (no scrollbars on the phone). The layout is decided from the window size, so
+  `python android\app\main.py --desktop` shows the same thing in a 412x915 window on the PC
+  (after a sync). Before the window is shown the pages are shaped from the screen: their
+  desktop minimum width would otherwise clamp Android's fullscreen window wider than the screen.
+- A debug build shows Android's "app compatibility / 16 KB" warning once per install because a
+  few unused Qt libraries in the wheel (Qt 3D, Quick Controls) are not 16 KB-aligned; OK
+  dismisses it. Trimming those libraries from the APK removes the warning (and most of its
+  size) and is the next optimisation.
 - Data: `/data/data/org.johncarter.chesspuz/files/chesspuz/user.sqlite` (players, runs,
   settings; survives updates), the puzzle database inside the unpacked app folder
   (`files/app/puzzles.sqlite`, replaced on every update). `crash.log` next to `user.sqlite`
