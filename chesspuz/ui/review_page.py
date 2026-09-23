@@ -24,7 +24,7 @@ from chesspuz.ui import device
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.board import BoardWidget, InputState
 from chesspuz.ui.engine import EngineWorker
-from chesspuz.ui.responsive import BoardPanelLayout
+from chesspuz.ui.responsive import BoardPanelLayout, FittedListWidget
 from chesspuz.userdb import RunPuzzleRecord, RunRecord
 
 WRONG_COLOR = QColor("#e57373")
@@ -64,12 +64,11 @@ class ReviewPage(QWidget):
         self.line_group.addButton(self.played_radio)
         self.solution_radio.toggled.connect(self._on_line_toggled)
 
-        self.moves = QListWidget()
+        self.moves = FittedListWidget()  # as tall as its rows: the panel scrolls, not the list
         self.moves.setFlow(QListWidget.Flow.LeftToRight)
         self.moves.setWrapping(True)
         self.moves.setResizeMode(QListWidget.ResizeMode.Adjust)
         self.moves.setSpacing(2)
-        self.moves.setMaximumHeight(140)
         self.moves.itemClicked.connect(self._on_move_clicked)
 
         self.first_button = QPushButton("|<")
@@ -133,6 +132,8 @@ class ReviewPage(QWidget):
         side.addLayout(bottom)
 
         self.shape = BoardPanelLayout(self, self.board, panel, panel_width=340)
+        # in portrait the puzzle list sits between the board and the panel and scrolls alone
+        self.shape.pin(self.puzzle_list, side, portrait_height=150)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     # -- loading -------------------------------------------------------------------------------
@@ -270,6 +271,7 @@ class ReviewPage(QWidget):
                 item.setText(entry.label + " ?")
             item.setFont(font)
             self.moves.addItem(item)
+        self.moves.fit()
 
         self._request_analysis()
         self.first_button.setEnabled(not model.at_start())

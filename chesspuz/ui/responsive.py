@@ -19,8 +19,10 @@ from PySide6.QtWidgets import (
     QBoxLayout,
     QFrame,
     QGridLayout,
+    QListWidget,
     QScrollArea,
     QScroller,
+    QSizePolicy,
     QWidget,
 )
 
@@ -59,9 +61,33 @@ def is_compact(widget: QWidget) -> bool:
     return shape_size(widget).width() < COMPACT_WIDTH
 
 
+def is_nested_view(widget: QWidget) -> bool:
+    """Whether ``widget`` sits inside another scroll area (a list in a scrolling panel)."""
+    parent = widget.parentWidget()
+    while parent is not None:
+        if isinstance(parent, QAbstractScrollArea):
+            return True
+        parent = parent.parentWidget()
+    return False
+
+
+def grab_touch(view: QAbstractScrollArea) -> None:
+    """Finger drags scroll ``view`` (kinetic); on a phone its scrollbar is hidden."""
+    QScroller.grabGesture(view.viewport(), QScroller.ScrollerGestureType.TouchGesture)
+    if device.MOBILE:  # a finger scrolls; the bar only takes room on a phone
+        view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+
+
+def release_touch(view: QAbstractScrollArea) -> None:
+    QScroller.ungrabGesture(view.viewport())
+
+
 def enable_touch_scrolling(root: QWidget) -> None:
     """Finger drags scroll every scroll area, table and list under ``root`` (kinetic).
 
+    A view nested inside another scroll area is left alone: two scrollers on one finger drag
+    the list and the page at once and the page jumps about. Such a list either grows to its
+    rows (``FittedListWidget``) or leaves the panel in portrait (``BoardPanelLayout.pin``).
     Qt Widgets only scroll with the scrollbar or the wheel by themselves; a touch gesture
     changes nothing for a mouse, so this is safe on the desktop too.
     """
@@ -69,9 +95,32 @@ def enable_touch_scrolling(root: QWidget) -> None:
     if isinstance(root, QAbstractScrollArea):
         views.append(root)
     for view in views:
-        QScroller.grabGesture(view.viewport(), QScroller.ScrollerGestureType.TouchGesture)
-        if device.MOBILE:  # a finger scrolls; the bar only takes room on a phone
-            view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        if not is_nested_view(view):
+            grab_touch(view)
+
+
+class FittedListWidget(QListWidget):
+    """A list as tall as its rows, so it never scrolls by itself: the scrolling panel around
+    it does. Call ``fit()`` after changing the items; a resize (a wrapping list re-flows its
+    rows) refits on its own."""
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setSizePolicy(QSizePolicy.Policy.Preferred, QSizePolicy.Policy.Fixed)
+
+    def fit(self) -> None:
+        bottom = 0
+        for index in range(self.count()):
+            bottom = max(bottom, self.visualItemRect(self.item(index)).bottom() + 1)
+        if self.count() == 0:
+            bottom = self.fontMetrics().height() + 4
+        self.setFixedHeight(bottom + self.spacing() + 2 * self.frameWidth())
+
+    def resizeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        super().resizeEvent(event)
+        self.fit()
 
 
 def make_scroll(content: QWidget) -> QScrollArea:
@@ -165,6 +214,11 @@ class BoardPanelLayout(QObject):
         self.panel_width = panel_width
         self.margin = margin
         self.portrait = False
+        self.pinned: QAbstractScrollArea | None = None
+        self.pinned_layout: QBoxLayout | None = None
+        self.pinned_index = 0
+        self.pinned_max = QWIDGETSIZE_MAX
+        self.pinned_height = 0
         self.scroll = make_scroll(panel)
         self.box = QBoxLayout(QBoxLayout.Direction.LeftToRight, host)
         self.box.setContentsMargins(margin, margin, margin, margin)
@@ -178,6 +232,19 @@ class BoardPanelLayout(QObject):
             self.relayout()
         return False
 
+    def pin(self, widget: QAbstractScrollArea, layout: QBoxLayout, portrait_height: int) -> None:
+        """A scrolling list of the panel that in portrait sits between the board and the panel,
+        outside the panel's scroll area: it takes the finger alone (a nested view never does,
+        see ``enable_touch_scrolling``) and stays in view while the panel scrolls. ``layout``
+        is the panel layout holding it now, ``portrait_height`` its height when pinned."""
+        self.pinned = widget
+        self.pinned_layout = layout
+        self.pinned_index = layout.indexOf(widget)
+        self.pinned_max = widget.maximumHeight()
+        self.pinned_height = portrait_height
+        if self.portrait:
+            self._place_pinned(True)
+
     def relayout(self) -> None:
         portrait = is_portrait(self.host)
         if portrait != self.portrait:
@@ -185,26 +252,50 @@ class BoardPanelLayout(QObject):
         if portrait:
             # a square board as wide as the window; the panel takes what is left and scrolls
             size = shape_size(self.host)
+            reserved = 160 + (self.pinned_height if self.pinned is not None else 0)
             side = max(120, size.width() - 2 * self.margin)
-            side = min(side, max(120, size.height() - 2 * self.margin - 160))
+            side = min(side, max(120, size.height() - 2 * self.margin - reserved))
             self.board.setFixedHeight(side)
 
     def _apply(self, portrait: bool) -> None:
         self.portrait = portrait
         if portrait:
             self.box.setDirection(QBoxLayout.Direction.TopToBottom)
-            self.box.setStretch(0, 0)
-            self.box.setStretch(1, 1)
+            self.box.setStretchFactor(self.board, 0)
+            self.box.setStretchFactor(self.scroll, 1)
             self.scroll.setMinimumWidth(0)
             self.scroll.setMaximumWidth(QWIDGETSIZE_MAX)
             self.panel.setMinimumWidth(0)
             self.panel.setMaximumWidth(QWIDGETSIZE_MAX)
         else:
             self.box.setDirection(QBoxLayout.Direction.LeftToRight)
-            self.box.setStretch(0, 1)
-            self.box.setStretch(1, 0)
+            self.box.setStretchFactor(self.board, 1)
+            self.box.setStretchFactor(self.scroll, 0)
             self.board.setMinimumHeight(0)
             self.board.setMaximumHeight(QWIDGETSIZE_MAX)
             self.scroll.setFixedWidth(self.panel_width + 4)
             self.panel.setMinimumWidth(0)
             self.panel.setMaximumWidth(self.panel_width)
+        if self.pinned is not None:
+            self._place_pinned(portrait)
+
+    def _place_pinned(self, portrait: bool) -> None:
+        widget = self.pinned
+        assert widget is not None
+        if portrait:
+            if self.box.indexOf(widget) == -1:
+                self.pinned_layout.removeWidget(widget)
+                widget.setParent(self.host)
+                self.box.insertWidget(1, widget)
+                widget.show()
+            widget.setFixedHeight(self.pinned_height)
+            grab_touch(widget)
+        else:
+            if self.box.indexOf(widget) != -1:
+                self.box.removeWidget(widget)
+                widget.setParent(self.panel)
+                self.pinned_layout.insertWidget(self.pinned_index, widget)
+                widget.show()
+            widget.setMinimumHeight(0)
+            widget.setMaximumHeight(self.pinned_max)
+            release_touch(widget)

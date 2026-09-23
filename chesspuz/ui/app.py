@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QStackedWidget,
 )
 
-from chesspuz import paths, sounds, themes
+from chesspuz import backup, paths, sounds, themes
 from chesspuz.puzzle import Puzzle
 from chesspuz.puzzledb import PuzzleRepository
 from chesspuz.run import DEFAULT_LIVES, RampSettings, clamp_lives
@@ -28,14 +28,43 @@ APP_NAME = "chesspuz"
 
 
 class AppContext:
-    """Databases and settings shared by every page."""
+    """Databases and settings shared by every page.
 
-    def __init__(self, puzzle_db: Path | None = None, user_db: Path | None = None) -> None:
+    ``auto_backup`` names a profiles file (see ``chesspuz.backup``) that is rewritten whenever
+    runs were recorded: the phone points it at its public Download folder, which survives an
+    uninstall of the app.
+    """
+
+    def __init__(
+        self,
+        puzzle_db: Path | None = None,
+        user_db: Path | None = None,
+        auto_backup: Path | None = None,
+    ) -> None:
         self.puzzle_db_path = Path(puzzle_db) if puzzle_db else paths.puzzle_db_path()
         self.user_db_path = Path(user_db) if user_db else paths.user_db_path()
+        self.auto_backup_path = Path(auto_backup) if auto_backup else None
+        self._backed_up: tuple[int, int] | None = None
         self.users = UserDB(self.user_db_path).open()
         self.puzzles: PuzzleRepository | None = None
         self.reopen_puzzles()
+
+    def auto_backup(self) -> bool:
+        """Rewrite the backup copy when runs or puzzles were recorded since the last one (or
+        no copy exists yet); False when nothing was written."""
+        path = self.auto_backup_path
+        if path is None or self.users.conn is None:
+            return False
+        counts = self.users.row_counts()
+        if counts == self._backed_up and path.exists():
+            return False
+        self._backed_up = counts  # a failed write is retried when something new is recorded
+        try:
+            backup.write_backup(self.users, path)
+        except OSError as exc:
+            print(f"chesspuz: no backup copy at {path} ({exc})", flush=True)
+            return False
+        return True
 
     def reopen_puzzles(self) -> bool:
         """(Re)open the puzzle database; returns whether one is available."""
@@ -161,7 +190,7 @@ class MainWindow(QMainWindow):
         self.home.played_requested.connect(self.show_played)
         self.played.home_requested.connect(self.show_home)
         self.played.puzzle_requested.connect(self.open_puzzle_window)
-        self.settings.data_cleared.connect(self.home.refresh)
+        self.settings.data_changed.connect(self.home.refresh)
         app = QApplication.instance()
         if app is not None:
             app.installEventFilter(self)
@@ -239,6 +268,7 @@ class MainWindow(QMainWindow):
             self.windows.remove(window)
         if self.ctx.users.conn is not None:
             self.home.refresh()
+            self.ctx.auto_backup()
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 (Qt override)
         if event.type() == QEvent.Type.MouseButtonPress and isinstance(watched, QAbstractButton):
@@ -298,6 +328,7 @@ class MainWindow(QMainWindow):
     def show_home(self) -> None:
         self.home.refresh()
         self.stack.setCurrentWidget(self.home)
+        self.ctx.auto_backup()  # after a run, a review, a practice: anything that recorded
 
     def show_leaderboard(self) -> None:
         self.leaderboard.refresh()
@@ -344,6 +375,7 @@ class MainWindow(QMainWindow):
             window.close()
         if self.ctx.users.conn is not None:  # closing twice, after the context is gone, is fine
             self.ctx.set_setting("geometry", bytes(self.saveGeometry().data()).hex())
+            self.ctx.auto_backup()
         event.accept()
 
 
@@ -380,6 +412,7 @@ def build(
     *,
     puzzle_db: Path | None = None,
     user_db: Path | None = None,
+    auto_backup: Path | None = None,
 ) -> tuple[QApplication, AppContext, MainWindow]:
     """Create the application, its shared context and the (not yet shown) main window.
 
@@ -393,7 +426,7 @@ def build(
     app.setApplicationName(APP_NAME)
     apply_dark_theme(app)
     app.setWindowIcon(app_icon())
-    ctx = AppContext(puzzle_db=puzzle_db, user_db=user_db)
+    ctx = AppContext(puzzle_db=puzzle_db, user_db=user_db, auto_backup=auto_backup)
     window = MainWindow(ctx)
     if not device.MOBILE:
         window.resize(1100, 760)

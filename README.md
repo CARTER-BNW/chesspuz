@@ -20,7 +20,8 @@ Review, leaderboard, stats, mistakes and settings on both shapes: [docs/screensh
 - Pause: press Pause while solving. The clock stops and the whole page is covered until you press Resume (or Back on the phone); the pause does not count in the puzzle's time.
 - Leaderboard and Stats have a Lives filter (preset to your setting). A run played with more lives also counts on the boards for fewer lives, with the score it had when it lost that many: a 3-life run stands on the 1-life board with its score before the first mistake. History always shows final scores.
 - Sounds: clicks, piece moves, captures and a chime or buzz for right and wrong. Settings has Mute all and a volume slider per sound.
-- Settings (also reachable from a run): lives per run, board and piece colours with a preview, text size, animation speed, the difficulty ramp, Clear stats per player, the Stockfish path and the database rebuild.
+- Settings (also reachable from a run): lives per run, board and piece colours with a preview, text size, animation speed, the difficulty ramp, Export and Import profile, Clear stats per player, the Stockfish path and the database rebuild.
+- Profiles: Export profile in Settings writes the runs, stats and settings of one player (or everyone) to a JSON file you keep anywhere: a cloud drive, the phone's Download folder, a new machine. Import profile merges such a file back: players are matched by name, runs already present are skipped, so a file can be imported twice or into a friend's app without damage. Settings come back only into an app nobody has used yet.
 - Timer: the time on the current puzzle is shown for information only; each puzzle's time appears in the run overview, in Review and on the Played page.
 - Played: every attempt you made. Double-click any puzzle there, on Mistakes, or in the run overview to play it again in its own window (Show solution, Try again). The first attempt in a window counts as practice.
 - Board: click-click or drag to move, drop the king on its rook to castle, pick the piece when a pawn promotes. Right-drag draws an arrow, right-click highlights a square (Shift/Ctrl/Alt change the colour), any left click clears them.
@@ -33,6 +34,11 @@ Review, leaderboard, stats, mistakes and settings on both shapes: [docs/screensh
 - First start: open Settings and press "Rebuild puzzle database" (downloads the Lichess puzzle file, about 300 MB, once). Puzzles and your results live in `%LOCALAPPDATA%\chesspuz`.
 - Optional: download Stockfish from https://stockfishchess.org and set its path in Settings for engine analysis in Review.
 
+## Your data across updates
+- Windows: runs, players and settings live in `%LOCALAPPDATA%\chesspuz\user.sqlite`, outside the app folder. Unzip a new version over the old one, or anywhere else, and everything is still there. Export profile in Settings gives you a file to keep as well.
+- Android: install the new APK over the old one and the data stays (the releases are signed with the same key). Uninstalling the app wipes its private folder, so after every run the app also writes a copy of every profile to `Download/chesspuz/chesspuz-profiles.json` on the phone; after a reinstall, Settings > Import profile brings it back. Export profile lets you pick any location, Google Drive included.
+- Moving to a new machine or phone: Export profile on the old one, Import profile on the new one.
+
 ## Build a release yourself
 - `python -m pip install -r requirements.txt -r requirements-dev.txt pyinstaller`
 - `build_release.bat` builds `dist\chesspuz\chesspuz.exe` and `dist\chesspuz-<version>-windows.zip` (icon from `tools\make_icon.py`, spec in `chesspuz.spec`).
@@ -41,7 +47,9 @@ Review, leaderboard, stats, mistakes and settings on both shapes: [docs/screensh
 The same app runs on a phone (portrait: board above a scrolling panel; finger scrolling; the
 Back key steps back instead of quitting; sounds through Android's AAudio; the puzzle database
 travels inside the APK). Install: download `chesspuz-<version>-arm64-v8a-release.apk` from the
-Releases page onto the phone and open it (allow installs from that source when asked).
+Releases page onto the phone and open it (allow installs from that source when asked). Install a
+newer APK the same way, over the old one: runs and settings stay. In Review the puzzle list sits
+between the board and the panel and scrolls on its own.
 `python android\sync.py all` syncs the code, builds the signed APK in the WSL box and installs
 it over USB; the pipeline, the toolchain and the phone controls are in
 [android/README.md](android/README.md), the design in [docs/specs/android.md](docs/specs/android.md).

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import sqlite3
+from pathlib import Path
+
 import chess
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QEvent, QFile, QFileInfo, QIODevice, QObject, QStandardPaths, Qt, Signal
 from PySide6.QtGui import QColor, QResizeEvent
 from PySide6.QtWidgets import (
     QBoxLayout,
@@ -26,7 +29,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from chesspuz import paths, sounds
+from chesspuz import backup, paths, sounds
 from chesspuz.importer import ImportSettings
 from chesspuz.run import DEFAULT_LIVES, MAX_LIVES, MIN_LIVES, RampSettings
 from chesspuz.ui import device, theme
@@ -67,11 +70,80 @@ def color_setting(ctx: AppContext, key: str) -> str:
     return normalize_color(ctx.setting(key, default), default)
 
 
+class _PickFromBlack(QObject):
+    """Qt's hue/saturation square keeps the current brightness, and black has none, so every
+    pick on it stays black until the brightness bar or the text box is touched. A press on
+    the square while the colour is black first raises the brightness to full."""
+
+    def __init__(self, dialog: QColorDialog) -> None:
+        super().__init__(dialog)
+        self.dialog = dialog
+
+    def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 (Qt override)
+        if event.type() == QEvent.Type.MouseButtonPress and self.dialog.currentColor().value() == 0:
+            self.dialog.setCurrentColor(QColor.fromHsv(0, 0, 255))
+        return False
+
+
+def color_pickers(dialog: QColorDialog) -> list[QWidget]:
+    """The dialog's hue/saturation square(s) (a private Qt widget, found by class name)."""
+    return [
+        child
+        for child in dialog.findChildren(QWidget)
+        if child.metaObject().className().endswith("QColorPicker")
+    ]
+
+
+def make_color_dialog(parent: QWidget | None, current: QColor, title: str) -> QColorDialog:
+    """Qt's own colour dialog (the same on every platform) that can pick from black."""
+    dialog = QColorDialog(current, parent)
+    dialog.setWindowTitle(title)
+    dialog.setOption(QColorDialog.ColorDialogOption.DontUseNativeDialog, True)
+    fix = _PickFromBlack(dialog)
+    for picker in color_pickers(dialog):
+        picker.installEventFilter(fix)
+    return dialog
+
+
+def read_text_file(path: str) -> str:
+    """Read a UTF-8 file by path or by a ``content://`` location (Android's file picker)."""
+    file = QFile(path)
+    if not file.open(QIODevice.OpenModeFlag.ReadOnly):
+        raise OSError(file.errorString() or f"cannot read {path}")
+    try:
+        return bytes(file.readAll().data()).decode("utf-8")
+    finally:
+        file.close()
+
+
+def write_text_file(path: str, text: str) -> None:
+    file = QFile(path)
+    mode = QIODevice.OpenModeFlag.WriteOnly | QIODevice.OpenModeFlag.Truncate
+    if not file.open(mode):
+        raise OSError(file.errorString() or f"cannot write {path}")
+    try:
+        data = text.encode("utf-8")
+        if file.write(data) != len(data):
+            raise OSError(file.errorString() or f"short write to {path}")
+    finally:
+        file.close()
+
+
+def documents_folder() -> Path:
+    location = QStandardPaths.StandardLocation.DocumentsLocation
+    return Path(QStandardPaths.writableLocation(location) or Path.home())
+
+
+def _file_label(path: str) -> str:
+    """The file name to show for a path or a content:// location."""
+    return QFileInfo(path).fileName() or path
+
+
 class SettingsPage(QWidget):
     home_requested = Signal()
     changed = Signal()  # any setting changed
     database_changed = Signal()  # the puzzle database was rebuilt
-    data_cleared = Signal()  # runs were deleted
+    data_changed = Signal()  # runs were deleted or imported
 
     def __init__(self, ctx: AppContext, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -189,24 +261,35 @@ class SettingsPage(QWidget):
         engine_form.addWidget(self.engine_status)
         self.engine_group = engine
 
-        # data
+        # data: export / import a profile, clear stats
         self.clear_player_box = QComboBox()
+        self.clear_player_box.setToolTip("The player Export profile and Clear stats apply to")
+        self.export_button = QPushButton("Export profile...")
+        self.export_button.clicked.connect(self._export)
+        self.import_button = QPushButton("Import profile...")
+        self.import_button.clicked.connect(self._import)
         self.clear_button = QPushButton("Clear stats...")
         self.clear_button.clicked.connect(self._clear_stats)
-        clear_row = QHBoxLayout()
-        clear_row.addWidget(self.clear_player_box)
-        clear_row.addWidget(self.clear_button)
-        clear_row.addStretch()
-        clear_hint = QLabel(
-            "Deletes every run of the chosen player: leaderboard, history, stats, mistakes and "
-            "the played list. Players and settings stay."
-        )
-        clear_hint.setObjectName("muted")
-        clear_hint.setWordWrap(True)
+        player_row = QHBoxLayout()
+        player_row.addWidget(QLabel("Player"))
+        player_row.addWidget(self.clear_player_box, 1)
+        # the three buttons in a row, stacked when the page is narrow (see relayout)
+        self.profile_row = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self.profile_row.addWidget(self.export_button)
+        self.profile_row.addWidget(self.import_button)
+        self.profile_row.addWidget(self.clear_button)
+        self.profile_row.addStretch()
+        profile_hint = QLabel(self._profile_hint())
+        profile_hint.setObjectName("muted")
+        profile_hint.setWordWrap(True)
+        self.data_status = QLabel()
+        self.data_status.setWordWrap(True)
         data = QGroupBox("Data")
         data_form = QVBoxLayout(data)
-        data_form.addLayout(clear_row)
-        data_form.addWidget(clear_hint)
+        data_form.addLayout(player_row)
+        data_form.addLayout(self.profile_row)
+        data_form.addWidget(profile_hint)
+        data_form.addWidget(self.data_status)
 
         # database
         self.db_label = QLabel()
@@ -292,6 +375,7 @@ class SettingsPage(QWidget):
         self.page_layout.setContentsMargins(margin, 12 if compact else 20, margin, 12)
         directions = QBoxLayout.Direction
         self.board_row.setDirection(directions.TopToBottom if compact else directions.LeftToRight)
+        self.profile_row.setDirection(directions.TopToBottom if compact else directions.LeftToRight)
         policies = QFormLayout.RowWrapPolicy
         for form in self.forms:
             form.setRowWrapPolicy(policies.WrapAllRows if compact else policies.WrapLongRows)
@@ -392,9 +476,10 @@ class SettingsPage(QWidget):
 
     def _pick_color(self, key: str) -> None:
         current = QColor(color_setting(self.ctx, key))
-        chosen = QColorDialog.getColor(current, self, COLOR_KEYS[key][0])
-        if chosen.isValid():
-            self.set_color(key, chosen.name())
+        dialog = make_color_dialog(self, current, COLOR_KEYS[key][0])
+        if dialog.exec() == QColorDialog.DialogCode.Accepted and dialog.selectedColor().isValid():
+            self.set_color(key, dialog.selectedColor().name())
+        dialog.deleteLater()
 
     def _reset_colors(self) -> None:
         for key, (_label, default) in COLOR_KEYS.items():
@@ -428,8 +513,88 @@ class SettingsPage(QWidget):
         if answer != QMessageBox.StandardButton.Yes:
             return
         removed = self.ctx.users.clear_runs(player_id)
-        self.progress_label.setText(f"Removed {removed} runs for {who}.")
-        self.data_cleared.emit()
+        self.data_status.setText(f"Removed {removed} runs for {who}.")
+        self.data_changed.emit()
+
+    # -- profiles ------------------------------------------------------------------------------
+
+    def _profile_hint(self) -> str:
+        if device.MOBILE:
+            where = (
+                "Your runs and settings live in the app's private storage: installing a new "
+                "APK over the old one keeps them, uninstalling wipes them."
+            )
+            if self.ctx.auto_backup_path is not None:
+                folder = self.ctx.auto_backup_path.parent
+                where += f" After every run a copy goes to {folder.name}/ in Download."
+        else:
+            where = (
+                f"Your runs and settings live in {self.ctx.user_db_path.parent}, outside the "
+                "app folder: replacing the app with a new version keeps them."
+            )
+        return (
+            "Export writes the runs, stats and settings of the chosen player (or everyone) to "
+            "a file you keep: a cloud drive, the phone's Download folder, a new machine. Import "
+            "merges such a file back: players are matched by name, runs already present are "
+            "skipped, settings are restored only into an app nobody has used yet. Clear stats "
+            "deletes every run of the chosen player; players and settings stay. " + where
+        )
+
+    def _selected_player_id(self) -> int | None:
+        """The player chosen in the box, or None for everyone."""
+        name = self.clear_player_box.currentText()
+        if name == ALL_PLAYERS:
+            return None
+        return next((p.id for p in self.ctx.users.players() if p.name == name), None)
+
+    def _export(self) -> None:
+        player_id = self._selected_player_id()
+        name = None if player_id is None else self.clear_player_box.currentText()
+        start = documents_folder() / backup.default_file_name(name)
+        path, _filter = QFileDialog.getSaveFileName(
+            self, "Export profile", str(start), "chesspuz profiles (*.json)"
+        )
+        if path:
+            self.export_to(path, player_id)
+
+    def export_to(self, path: str, player_id: int | None = None) -> bool:
+        """Write the profile(s) to ``path`` (a file path or a content:// location)."""
+        players = None if player_id is None else [player_id]
+        data = backup.export_profiles(self.ctx.users, players)
+        try:
+            write_text_file(path, backup.to_json(data))
+        except OSError as exc:
+            QMessageBox.warning(self, "Export profile", f"Could not write the file:\n{exc}")
+            return False
+        runs = sum(len(p["runs"]) for p in data["players"])
+        who = f"{len(data['players'])} players" if player_id is None else data["players"][0]["name"]
+        self.data_status.setText(f"Exported {runs} runs of {who} to {_file_label(path)}.")
+        return True
+
+    def _import(self) -> None:
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            "Import profile",
+            str(documents_folder()),
+            "chesspuz profiles (*.json);;All files (*)",
+        )
+        if path:
+            self.import_from(path)
+
+    def import_from(self, path: str) -> backup.ImportReport | None:
+        """Merge the profiles file at ``path``; None (after a message) when it is not one."""
+        try:
+            data = backup.from_json(read_text_file(path))
+            report = backup.import_profiles(self.ctx.users, data)
+        except (OSError, ValueError, sqlite3.Error) as exc:
+            QMessageBox.warning(self, "Import profile", f"Nothing imported:\n{exc}")
+            return None
+        self.data_status.setText(f"Imported {_file_label(path)}: {report.summary()}")
+        self.refresh()  # new players in the box
+        if report.settings_applied:
+            self.changed.emit()
+        self.data_changed.emit()
+        return report
 
     def _browse_engine(self) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Choose the Stockfish executable")

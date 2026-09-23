@@ -38,6 +38,19 @@ def prepare_environment(private_dir: Path, app_dir: Path) -> dict[str, Path]:
     return {"data": data, "cache": cache, "puzzles": app_dir / "puzzles.sqlite"}
 
 
+def auto_backup_path() -> Path | None:
+    """Where the phone keeps a copy of the profiles: the public Download folder, which an
+    uninstall of the app does not touch (Settings > Import profile brings it back). None on
+    the PC. Android 11+ lets an app create files there without any permission; if it cannot,
+    the copy is simply skipped."""
+    if not is_android():
+        return None
+    for base in (Path("/storage/emulated/0"), Path(os.environ.get("EXTERNAL_STORAGE", ""))):
+        if str(base) and base.is_dir():
+            return base / "Download" / "chesspuz" / "chesspuz-profiles.json"
+    return None
+
+
 def _phone_sounds() -> None:
     """Route the app's sound clips to Android's AAudio output (silent if that fails)."""
     try:
@@ -87,7 +100,9 @@ def main(argv: list[str] | None = None) -> int:
         puzzle_db = where["puzzles"]
         if not puzzle_db.exists():
             puzzle_db = None  # the home page explains that no database is available
-        qt_app, ctx, window = ui_app.build(argv=[sys.argv[0]], puzzle_db=puzzle_db)
+        qt_app, ctx, window = ui_app.build(
+            argv=[sys.argv[0]], puzzle_db=puzzle_db, auto_backup=auto_backup_path()
+        )
         window.show()
         if desktop or not is_android():
             # twice: the first resize reshapes the pages, the second is no longer clamped by

@@ -174,6 +174,8 @@ class RunPage(QWidget):
 
         # board left + panel right, or board above a scrolling panel when taller than wide
         self.shape = BoardPanelLayout(self, self.board, panel, panel_width=300)
+        # in portrait "This run" sits between the board and the panel and scrolls alone
+        self.shape.pin(self.results, side, portrait_height=120)
         self.overlay.raise_()
         self._update_actions()
 

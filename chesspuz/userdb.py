@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from collections.abc import Callable, Collection
+from collections.abc import Callable, Collection, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -600,6 +600,122 @@ class UserDB:
             (player_id, limit),
         ).fetchall()
         return [PlayedRecord(_to_run_puzzle(row), row["played_at"], row["mode"]) for row in rows]
+
+    # -- export / import (chesspuz/backup.py) ----------------------------------------------------
+
+    def run_rows(self, player_id: int) -> list[dict]:
+        """Every run of a player with its puzzles as plain dicts, oldest first."""
+        runs = self._db.execute(
+            "SELECT * FROM runs WHERE player_id = ? ORDER BY id", (player_id,)
+        ).fetchall()
+        out = []
+        for row in runs:
+            puzzles = self._db.execute(
+                "SELECT * FROM run_puzzles WHERE run_id = ? ORDER BY seq", (row["id"],)
+            ).fetchall()
+            out.append(
+                {
+                    "started_at": row["started_at"],
+                    "ended_at": row["ended_at"],
+                    "status": row["status"],
+                    "score": row["score"],
+                    "lives_lost": row["lives_lost"],
+                    "types": json.loads(row["types_json"]),
+                    "start_rating": row["start_rating"],
+                    "step": row["step"],
+                    "max_rating_solved": row["max_rating_solved"],
+                    "total_ms": row["total_ms"],
+                    "mode": row["mode"],
+                    "lives": row["lives"],
+                    "puzzles": [
+                        {
+                            "seq": p["seq"],
+                            "puzzle_id": p["puzzle_id"],
+                            "fen": p["fen"],
+                            "moves": p["moves"],
+                            "rating": p["rating"],
+                            "types": json.loads(p["types_json"]),
+                            "result": p["result"],
+                            "target_rating": p["target_rating"],
+                            "solve_ms": p["solve_ms"],
+                            "player_moves": p["player_moves"],
+                            "alternate_mate": bool(p["alternate_mate"]),
+                        }
+                        for p in puzzles
+                    ],
+                }
+            )
+        return out
+
+    def run_keys(self, player_id: int) -> set[tuple[str, str, int]]:
+        """(start time, mode, puzzles played) of a player's runs: the duplicate test on import."""
+        rows = self._db.execute(
+            "SELECT r.started_at, r.mode,"
+            " (SELECT COUNT(*) FROM run_puzzles rp WHERE rp.run_id = r.id) AS n"
+            " FROM runs r WHERE r.player_id = ?",
+            (player_id,),
+        ).fetchall()
+        return {(row["started_at"], row["mode"], int(row["n"])) for row in rows}
+
+    def insert_run(
+        self, player_id: int, run: Mapping[str, object], puzzles: Sequence[Mapping[str, object]]
+    ) -> int:
+        """Insert an ended run (dicts shaped like ``run_rows``) under a new id; returns it."""
+        with self._db:
+            cursor = self._db.execute(
+                "INSERT INTO runs (player_id, started_at, ended_at, status, score, lives_lost,"
+                " types_json, start_rating, step, max_rating_solved, total_ms, mode, lives)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    player_id,
+                    run["started_at"],
+                    run["ended_at"],
+                    run["status"],
+                    run["score"],
+                    run["lives_lost"],
+                    _types_json(run["types"]),  # type: ignore[arg-type]
+                    run["start_rating"],
+                    run["step"],
+                    run["max_rating_solved"],
+                    run["total_ms"],
+                    run["mode"],
+                    run["lives"],
+                ),
+            )
+            run_id = int(cursor.lastrowid or 0)
+            self._db.executemany(
+                "INSERT INTO run_puzzles (run_id, seq, puzzle_id, fen, moves, rating, types_json,"
+                " result, target_rating, solve_ms, player_moves, alternate_mate)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [
+                    (
+                        run_id,
+                        p["seq"],
+                        p["puzzle_id"],
+                        p["fen"],
+                        p["moves"],
+                        p["rating"],
+                        _types_json(p["types"]),  # type: ignore[arg-type]
+                        p["result"],
+                        p["target_rating"],
+                        p["solve_ms"],
+                        p["player_moves"],
+                        int(bool(p["alternate_mate"])),
+                    )
+                    for p in puzzles
+                ],
+            )
+        return run_id
+
+    def settings_dict(self) -> dict[str, str]:
+        rows = self._db.execute("SELECT key, value FROM settings ORDER BY key").fetchall()
+        return {row["key"]: row["value"] for row in rows}
+
+    def row_counts(self) -> tuple[int, int]:
+        """(runs, puzzles played): a cheap way to notice that something was recorded."""
+        runs = self._db.execute("SELECT COUNT(*) FROM runs").fetchone()[0]
+        puzzles = self._db.execute("SELECT COUNT(*) FROM run_puzzles").fetchone()[0]
+        return int(runs), int(puzzles)
 
     def clear_runs(self, player_id: int | None = None) -> int:
         """Delete every run (and its puzzles) of a player, or of everyone; returns runs removed."""

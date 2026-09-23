@@ -84,7 +84,7 @@ def test_clear_stats_from_settings(ctx, qtbot, monkeypatch):  # noqa: F811
     window.show_settings()
     monkeypatch.setattr(QMessageBox, "question", lambda *a, **k: QMessageBox.StandardButton.Yes)
     page.clear_player_box.setCurrentText("Alice")
-    with qtbot.waitSignal(page.data_cleared, timeout=1000):
+    with qtbot.waitSignal(page.data_changed, timeout=1000):
         page.clear_button.click()
     assert ctx.users.history(alice.id) == [] and len(ctx.users.history(bob.id)) == 1
     page.clear_player_box.setCurrentText("All players")
