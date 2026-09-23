@@ -1,6 +1,6 @@
 # chesspuz
 
-A dark-mode desktop chess puzzle trainer with a chess.com-style Survival mode: three lives (1-10 in Settings), no clock, puzzles get harder the more you solve. Review every puzzle of a run move by move, explore alternatives, draw arrows and highlights, and compare runs on local leaderboards. Puzzles come from the free Lichess puzzle database, imported once into a local SQLite file and filtered by the 19 chess.com puzzle types.
+A dark-mode chess puzzle trainer for Windows and Android with a chess.com-style Survival mode: three lives (1-10 in Settings), no clock, puzzles get harder the more you solve. Review every puzzle of a run move by move, explore alternatives, draw arrows and highlights, and compare runs on local leaderboards. Puzzles come from the free Lichess puzzle database, imported once into a local SQLite file and filtered by the 19 chess.com puzzle types.
 
 First run: `python main.py import --download` (one-time, about 300 MB) builds the puzzle database in `%LOCALAPPDATA%/chesspuz`, or press "Rebuild puzzle database" in Settings.
 
@@ -30,7 +30,7 @@ Review, leaderboard, stats, mistakes and settings on both shapes: [docs/screensh
 - Support the Dev and Check for Updates, above the menu on the home page, open https://buymeacoffee.com/carter.bnw and the Releases page in your browser. The status line at the bottom of the home page shows the version you are running.
 
 ## Install (Windows)
-- Download `chesspuz-<version>-windows.zip` from the Releases page, unzip it anywhere and run `chesspuz.exe`.
+- Download `chesspuz-<version>-windows.zip` from the [Releases page](https://github.com/CARTER-BNW/chesspuz/releases), unzip it anywhere and run `chesspuz.exe`.
 - First start: open Settings and press "Rebuild puzzle database" (downloads the Lichess puzzle file, about 300 MB, once). Puzzles and your results live in `%LOCALAPPDATA%\chesspuz`.
 - Optional: download Stockfish from https://stockfishchess.org and set its path in Settings for engine analysis in Review.
 
@@ -47,7 +47,8 @@ Review, leaderboard, stats, mistakes and settings on both shapes: [docs/screensh
 The same app runs on a phone (portrait: board above a scrolling panel; finger scrolling; the
 Back key steps back instead of quitting; sounds through Android's AAudio; the puzzle database
 travels inside the APK). Install: download `chesspuz-<version>-arm64-v8a-release.apk` from the
-Releases page onto the phone and open it (allow installs from that source when asked). Install a
+[Releases page](https://github.com/CARTER-BNW/chesspuz/releases) onto the phone and open it
+(allow installs from that source when asked). Install a
 newer APK the same way, over the old one: runs and settings stay. In Review the puzzle list sits
 between the board and the panel and scrolls on its own.
 `python android\sync.py all` syncs the code, builds the signed APK in the WSL box and installs
