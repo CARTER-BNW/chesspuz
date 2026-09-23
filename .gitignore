@@ -36,3 +36,6 @@ dist/
 *.zst
 *.part
 .gstack/
+
+# playwright MCP screenshots (tool artefacts)
+.playwright-mcp/

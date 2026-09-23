@@ -104,7 +104,7 @@ Outcome: John's next change list, on desktop and phone. Spec: docs/specs/lives-a
 - [x] Tests (tests/test_round3.py), offscreen screenshots at 412x915 and 1100x760, version 0.3.0
 - [x] Release 0.3.0 on GitHub: Windows zip + APK + README PDF (2026-09-23)
 - [x] Support the Dev (buymeacoffee.com/carter.bnw) and Check for Updates (Releases page) buttons above the home menu; version 0.3.1 built (2026-09-23)
-- [ ] Release 0.3.1 on GitHub (artifacts built, waiting for John's go)
+- [x] Release 0.3.1 on GitHub for sharing: zip + APK + README PDF, release page with screenshots of every feature, README screenshots section (2026-09-23)
 - [ ] APK installed on the phone (John, from the Releases page; or `python android\sync.py install run` on USB)
 Done when: the changes are on the phone and in a GitHub release.
 

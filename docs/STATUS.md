@@ -1,17 +1,19 @@
 # STATUS - chesspuz
 last_updated: 2026-09-23
-phase: 0.3.0 released (round 3) + README PDF; 0.3.1 (Support the Dev / Check for Updates buttons) committed and built, not yet published
+phase: 0.3.1 released for sharing (Windows zip + APK + README PDF, release page with screenshots of every feature); John is posting about the app
 
 ## Next action
-- If John says go: `gh release create v0.3.1 dist\chesspuz-0.3.1-windows.zip android\bin\chesspuz-0.3.1-arm64-v8a-release.apk --title "chesspuz 0.3.1" --notes-file build\release-notes-0.3.1.md` (both artifacts built from 463caf5 on 2026-09-23; exe smoke-run offscreen; notes file ready). Optionally regenerate the README PDF for 0.3.1 (recipe under Build notes) and upload it too.
-- Then John installs the APK from the Releases page (or `python android\sync.py install run` on USB) and tries: the two new buttons open the browser on the phone (QDesktopServices.openUrl, not yet tried on the device), Settings > Lives per run, Pause / Resume / Back, Leaderboard and Stats with the Lives filter.
+- John installs the 0.3.1 APK from the Releases page (or `python android\sync.py install run` on USB) and tries: the Support the Dev / Check for Updates buttons open the browser on the phone (QDesktopServices.openUrl, not yet tried on the device), Settings > Lives per run, Pause / Resume / Back, Leaderboard and Stats with the Lives filter.
+- Next feedback round: like round 3 (spec note in docs/specs, implement, `python -m pytest -q`, `ruff check . && ruff format .`, screenshots at both shapes if the UI changed, builds, release). For a release meant for sharing, reuse the 0.3.1 release page as the template (`build/release-notes-0.3.1.md` is gitignored: regenerate from the recipe under Build notes) and refresh the screenshots with the same script.
 
 ## Blockers
 - none
 
-## 0.3.1 (2026-09-23, built, unpublished)
-- Home page: "Support the Dev" (buymeacoffee.com/carter.bnw) and "Check for Updates" (GitHub releases) buttons in their own row above the menu; `chesspuz.SUPPORT_URL` / `RELEASES_URL`, `home_page.open_link` (QDesktopServices). The status line shows the running version. Test in tests/test_round3.py; screenshots checked at both shapes.
-- Release v0.3.0 also carries `chesspuz-0.3.0-readme.pdf` (the README as a shareable PDF; recipe under Build notes).
+## 0.3.1 (2026-09-23, released)
+- Home page: "Support the Dev" (buymeacoffee.com/carter.bnw) and "Check for Updates" (GitHub releases) buttons in their own row above the menu; `chesspuz.SUPPORT_URL` / `RELEASES_URL`, `home_page.open_link` (QDesktopServices). The status line shows the running version. Test in tests/test_round3.py.
+- Release v0.3.1 (https://github.com/CARTER-BNW/chesspuz/releases/tag/v0.3.1): Windows zip, APK, `chesspuz-0.3.1-readme.pdf` (9 pages, with screenshots), and a full feature page as the notes (hero image, download table, every feature with a screenshot, phone trio, what is new, support link; no em dashes, John's request for sharing). Images come from `docs/screenshots/` on main via raw.githubusercontent.com, so those files must stay where they are (or the release page loses its pictures).
+- Screenshots: `docs/screenshots/{desktop,phone}-{home,run,paused,review,leaderboard,stats,mistakes,settings}.png` (16 files, 1.7 MB), taken offscreen at QT_SCALE_FACTOR 1.5 with the real puzzle database and sample runs for three players (session scratch script `release_shots.py`: seeds runs through `UserDB.new_run` with a fake clock, drives the run page to the fourth puzzle, draws an arrow, pauses). The README has a Screenshots section (HTML img tags with widths, which GitHub renders; the PDF copy turns them into markdown images).
+- Release v0.3.0 also carries `chesspuz-0.3.0-readme.pdf`.
 
 ## Round 3 (2026-09-23)
 - Lives per run: Settings > Difficulty (1-10, default 3), `AppContext.lives()`, stored on every run row (`runs.lives`, schema 3; earlier runs = 3). Hearts wrap, the home subtitle and best-score line name the number.
