@@ -56,7 +56,7 @@ it over USB; the pipeline, the toolchain and the phone controls are in
 `python android\app\main.py --desktop` shows the phone layout in a window on the PC.
 
 ## Commands
-- Run: double-click `run.bat` (or `python main.py`; `run.bat --console` shows errors)
+- Run: double-click `run.bat` (or `python main.py`; `run.bat --console` shows errors). The bat uses the repository's `.venv` when there is one, else the python on PATH, and says so if the packages are missing.
 - Test: `python -m pytest -q`
 - Lint + format: `ruff check . && ruff format .`
 - Install deps: `python -m pip install -r requirements.txt -r requirements-dev.txt`
