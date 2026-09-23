@@ -1,16 +1,16 @@
 # STATUS - chesspuz
 last_updated: 2026-09-23
-phase: 0.4.0 built (feedback round 4 = Phase 11: profile export/import, data across updates, colour picker from black, phone Review scrolling) and waiting as a DRAFT release for John's phone check.
+phase: 0.4.0 released (feedback round 4 = Phase 11: profile export/import, data across updates, colour picker from black, phone Review scrolling, run.bat fix). John approved the round on the desktop; the phone check is still open.
 
 ## Next action
-- John checks 0.4.0 on the Pixel 9a from the draft release page (https://github.com/CARTER-BNW/chesspuz/releases/tag/untagged-4b05950ec53759ce9cc2, visible only to him while logged in; the APK installs over 0.3.1 and keeps the data): Review page (puzzle list under the board scrolls alone, no page jump), Settings > Data > Export profile (Android's file picker, save to Download or Drive), Import profile (pick the file back), and whether `Download/chesspuz/chesspuz-profiles.json` appears after a run (the auto copy; a `chesspuz: no backup copy` line in `python android\sync.py logs` if not). Also on Windows: a black piece colour, then the colour square picks. Then `gh release edit v0.4.0 --draft=false` publishes it (the tag v0.4.0 is created at that moment), and John posts the link. Anything he reports = round 5.
+- Ask John what the Pixel 9a says about 0.4.0 (installed from the Releases page over 0.3.1, data kept): Review page (puzzle list under the board scrolls alone, no page jump), Settings > Data > Export profile (Android's file picker, save to Download or Drive), Import profile (pick the file back), and whether `Download/chesspuz/chesspuz-profiles.json` appears after a run (the auto copy; a `chesspuz: no backup copy` line in `python android\sync.py logs` if not). Anything he reports = round 5 = Phase 12: spec note if bigger than a fix, implement, tests, ruff, screenshots if the UI changed, builds, release with the recipe below.
 
 ## Blockers
 - none. Unverified on a device: Qt's native Android file dialog (SAF, content:// locations) behind Export/Import, and writing to the public Download folder without a permission (Android 11+ should allow it; the code skips the copy with a log line if not).
 
 ## Where things are
-- Code: main, all pushed (2a62102). Version 0.4.0 in `chesspuz/__init__.py`, `pyproject.toml`, `android/VERSION`. 181 tests green, ruff clean.
-- Draft release v0.4.0 (untagged until published): `chesspuz-0.4.0-windows.zip` (smoke-tested offscreen), `chesspuz-0.4.0-arm64-v8a-release.apk` (build stamp 2a62102, 70.5 MB), `chesspuz-0.4.0-readme.pdf` (10 pages, checked), notes = the sharing page with a "New in 0.4.0" section (`build/release-notes-0.4.0.md`). Published: v0.3.1 (Latest), v0.3.0, v0.2.0 (last one John confirmed on the phone), v0.1.0.
+- Code: main, all pushed. Version 0.4.0 in `chesspuz/__init__.py`, `pyproject.toml`, `android/VERSION`. 181 tests green, ruff clean.
+- Release v0.4.0 (Latest, https://github.com/CARTER-BNW/chesspuz/releases/tag/v0.4.0): `chesspuz-0.4.0-windows.zip` (smoke-tested offscreen), `chesspuz-0.4.0-arm64-v8a-release.apk` (build stamp 2a62102, 70.5 MB; the app code at the tag is the built code, the later commits are docs and run.bat), `chesspuz-0.4.0-readme.pdf` (10 pages, from the final README), notes = the sharing page with a "New in 0.4.0" section (`build/release-notes-0.4.0.md`). Earlier: v0.3.1, v0.3.0, v0.2.0 (last one John confirmed on the phone), v0.1.0.
 - Spec of this round: `docs/specs/profiles-and-phone-fixes.md`. Tests: `tests/test_round4.py`.
 - Screenshots regenerated at both shapes (the phone review and run shots show the pinned lists); the README has a "Your data across updates" section and the profiles bullet.
 - Sharing: nothing John shares may contain em dashes (checked: none in README, notes, spec).

@@ -115,8 +115,10 @@ Outcome: John's list after sharing 0.3.1: two bugs and two features, on desktop 
 - [x] Nested lists never take the finger; Review's puzzle list and the run page's "This run" list sit between the board and the panel in portrait (`BoardPanelLayout.pin`), the move list fits its rows (`FittedListWidget`)
 - [x] `chesspuz/backup.py`: profiles as JSON, merge on import (players by name, duplicate runs skipped, settings only into a fresh app); Export / Import profile buttons in Settings > Data (QFile, so Android's content:// picker locations work)
 - [x] Data across updates: README section; the phone writes `Download/chesspuz/chesspuz-profiles.json` after every run (`AppContext.auto_backup`)
-- [x] Tests (tests/test_round4.py, 181 green), screenshots regenerated, version 0.4.0, Windows zip + APK built, draft release v0.4.0 with the sharing page
-- [ ] Phone check by John: Review scrolling, Export to Download, Import after a reinstall, the automatic copy in Download/chesspuz; then publish the draft (and the README PDF)
+- [x] Tests (tests/test_round4.py, 181 green), screenshots regenerated, version 0.4.0, Windows zip + APK built
+- [x] `run.bat` uses the repository's `.venv` and reports missing packages instead of failing silently
+- [x] Release v0.4.0 published (zip, APK, README PDF, sharing page with "New in 0.4.0"), README with the Releases link and "Your data across updates" (2026-09-23)
+- [ ] Phone check by John: Review scrolling, Export to Download, Import after a reinstall, the automatic copy in Download/chesspuz
 Done when: the changes are on the phone and in a GitHub release.
 
 ## Decisions
