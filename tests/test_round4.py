@@ -103,6 +103,7 @@ def test_review_lists_leave_the_finger_to_one_view(ctx: AppContext, qtbot, monke
     assert QScroller.hasScroller(review.puzzle_list.viewport())
     assert not QScroller.hasScroller(review.moves.viewport())
     assert review.puzzle_list.isVisible() and review.moves.isVisible()
+    assert review.puzzle_caption.isHidden()  # the label stays in the panel, so it hides
     assert review.board.height() + 150 < PHONE[1]
     review.puzzle_list.setCurrentRow(1)
     assert review.model.index == 1
@@ -113,7 +114,7 @@ def test_review_lists_leave_the_finger_to_one_view(ctx: AppContext, qtbot, monke
     assert review.puzzle_list.parentWidget() is review.shape.panel
     assert review.puzzle_list.maximumHeight() == 190
     assert released == [review.puzzle_list]  # the gesture is released with the pin
-    assert review.puzzle_list.isVisible()
+    assert review.puzzle_list.isVisible() and not review.puzzle_caption.isHidden()
 
 
 def test_run_page_pins_its_result_list_in_portrait(ctx: AppContext, qtbot) -> None:  # noqa: F811
@@ -124,9 +125,11 @@ def test_run_page_pins_its_result_list_in_portrait(ctx: AppContext, qtbot) -> No
     assert page.shape.box.indexOf(page.results) == 1
     assert page.results.height() == 120
     assert QScroller.hasScroller(page.results.viewport())
+    assert page.results_caption.isHidden()
     _shape(page, DESKTOP)
     assert page.shape.box.indexOf(page.results) == -1
     assert page.results.maximumHeight() == 140
+    assert not page.results_caption.isHidden()
 
 
 def test_main_window_grabs_only_outer_views(ctx: AppContext, qtbot) -> None:  # noqa: F811

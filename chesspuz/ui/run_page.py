@@ -162,7 +162,8 @@ class RunPage(QWidget):
         actions.addWidget(self.pause_button)
         side.addLayout(actions)
         side.addSpacing(8)
-        side.addWidget(QLabel("This run"))
+        self.results_caption = QLabel("This run")
+        side.addWidget(self.results_caption)
         side.addWidget(self.results)
         side.addStretch()
         buttons = QHBoxLayout()
@@ -175,7 +176,7 @@ class RunPage(QWidget):
         # board left + panel right, or board above a scrolling panel when taller than wide
         self.shape = BoardPanelLayout(self, self.board, panel, panel_width=300)
         # in portrait "This run" sits between the board and the panel and scrolls alone
-        self.shape.pin(self.results, side, portrait_height=120)
+        self.shape.pin(self.results, side, portrait_height=120, caption=self.results_caption)
         self.overlay.raise_()
         self._update_actions()
 

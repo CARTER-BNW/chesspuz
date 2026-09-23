@@ -109,9 +109,14 @@ Outcome: John's next change list, on desktop and phone. Spec: docs/specs/lives-a
 Done when: the changes are on the phone and in a GitHub release.
 
 ## Phase 11 - Feedback round 4
-Outcome: whatever comes back from sharing 0.3.1 and from the phone, on desktop and phone.
-- [ ] Phone check of 0.3.1 with John (link buttons open the browser, lives, pause, Lives filter); collect his list; spec anything bigger than a fix
-- [ ] Implement, test, screenshots if the UI changed (`python tools\release_shots.py docs\screenshots desktop|phone`), builds, release with the sharing-page recipe in docs/STATUS.md
+Outcome: John's list after sharing 0.3.1: two bugs and two features, on desktop and phone. Spec: docs/specs/profiles-and-phone-fixes.md
+- [x] John's list collected (2026-09-23): black colour picker (Windows), Review list double-scrolls (phone), profile export/import, stats that survive replacing the app
+- [x] Colour dialog picks from black (`make_color_dialog`, a press on the hue/saturation square lifts the brightness)
+- [x] Nested lists never take the finger; Review's puzzle list and the run page's "This run" list sit between the board and the panel in portrait (`BoardPanelLayout.pin`), the move list fits its rows (`FittedListWidget`)
+- [x] `chesspuz/backup.py`: profiles as JSON, merge on import (players by name, duplicate runs skipped, settings only into a fresh app); Export / Import profile buttons in Settings > Data (QFile, so Android's content:// picker locations work)
+- [x] Data across updates: README section; the phone writes `Download/chesspuz/chesspuz-profiles.json` after every run (`AppContext.auto_backup`)
+- [x] Tests (tests/test_round4.py, 181 green), screenshots regenerated, version 0.4.0, Windows zip + APK built, draft release v0.4.0 with the sharing page
+- [ ] Phone check by John: Review scrolling, Export to Download, Import after a reinstall, the automatic copy in Download/chesspuz; then publish the draft (and the README PDF)
 Done when: the changes are on the phone and in a GitHub release.
 
 ## Decisions

@@ -114,7 +114,8 @@ class ReviewPage(QWidget):
         side = QVBoxLayout(panel)
         side.addWidget(self.header)
         side.addWidget(self.subheader)
-        side.addWidget(QLabel("Puzzles in this run"))
+        self.puzzle_caption = QLabel("Puzzles in this run")
+        side.addWidget(self.puzzle_caption)
         side.addWidget(self.puzzle_list)
         side.addLayout(lines)
         side.addWidget(self.moves)
@@ -133,7 +134,7 @@ class ReviewPage(QWidget):
 
         self.shape = BoardPanelLayout(self, self.board, panel, panel_width=340)
         # in portrait the puzzle list sits between the board and the panel and scrolls alone
-        self.shape.pin(self.puzzle_list, side, portrait_height=150)
+        self.shape.pin(self.puzzle_list, side, portrait_height=150, caption=self.puzzle_caption)
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     # -- loading -------------------------------------------------------------------------------

@@ -219,6 +219,7 @@ class BoardPanelLayout(QObject):
         self.pinned_index = 0
         self.pinned_max = QWIDGETSIZE_MAX
         self.pinned_height = 0
+        self.pinned_caption: QWidget | None = None
         self.scroll = make_scroll(panel)
         self.box = QBoxLayout(QBoxLayout.Direction.LeftToRight, host)
         self.box.setContentsMargins(margin, margin, margin, margin)
@@ -232,16 +233,24 @@ class BoardPanelLayout(QObject):
             self.relayout()
         return False
 
-    def pin(self, widget: QAbstractScrollArea, layout: QBoxLayout, portrait_height: int) -> None:
+    def pin(
+        self,
+        widget: QAbstractScrollArea,
+        layout: QBoxLayout,
+        portrait_height: int,
+        caption: QWidget | None = None,
+    ) -> None:
         """A scrolling list of the panel that in portrait sits between the board and the panel,
         outside the panel's scroll area: it takes the finger alone (a nested view never does,
         see ``enable_touch_scrolling``) and stays in view while the panel scrolls. ``layout``
-        is the panel layout holding it now, ``portrait_height`` its height when pinned."""
+        is the panel layout holding it now, ``portrait_height`` its height when pinned and
+        ``caption`` a label of the panel that is hidden while the list is away."""
         self.pinned = widget
         self.pinned_layout = layout
         self.pinned_index = layout.indexOf(widget)
         self.pinned_max = widget.maximumHeight()
         self.pinned_height = portrait_height
+        self.pinned_caption = caption
         if self.portrait:
             self._place_pinned(True)
 
@@ -289,7 +298,11 @@ class BoardPanelLayout(QObject):
                 self.box.insertWidget(1, widget)
                 widget.show()
             widget.setFixedHeight(self.pinned_height)
+            if device.MOBILE:  # long rows are clipped rather than scrolled sideways by a finger
+                widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
             grab_touch(widget)
+            if self.pinned_caption is not None:
+                self.pinned_caption.hide()
         else:
             if self.box.indexOf(widget) != -1:
                 self.box.removeWidget(widget)
@@ -298,4 +311,7 @@ class BoardPanelLayout(QObject):
                 widget.show()
             widget.setMinimumHeight(0)
             widget.setMaximumHeight(self.pinned_max)
+            widget.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
             release_touch(widget)
+            if self.pinned_caption is not None:
+                self.pinned_caption.show()
