@@ -72,6 +72,7 @@ python "$WORK/wsl/patch_spec.py" buildozer.spec \
 echo "== buildozer.spec (effective, uncommented lines) =="
 grep -v -E '^\s*(#|$)' buildozer.spec
 mkdir -p "$WORK/bin" "$SRC/bin"
+rm -f "$WORK"/bin/*.apk  # only this build's APK gets copied back
 echo "== buildozer android debug  (work dir $WORK/app) =="
 set +e
 buildozer android debug 2>&1 | tee "$WORK/build.log"
