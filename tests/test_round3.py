@@ -241,6 +241,29 @@ def test_back_key_resumes_a_paused_run(ctx: AppContext, qtbot, monkeypatch) -> N
     assert not page.paused and not page.overlay.isVisible()
 
 
+# -- home page links -----------------------------------------------------------------------------
+
+
+def test_home_links_open_in_the_browser(ctx: AppContext, qtbot, monkeypatch) -> None:  # noqa: F811
+    from chesspuz import RELEASES_URL, SUPPORT_URL, __version__
+    from chesspuz.ui import home_page
+    from chesspuz.ui.home_page import HomePage
+
+    opened: list[str] = []
+    monkeypatch.setattr(home_page, "open_link", lambda url: opened.append(url) or True)
+    page = HomePage(ctx)
+    qtbot.addWidget(page)
+    page.support_button.click()
+    page.updates_button.click()
+    assert opened == [SUPPORT_URL, RELEASES_URL]
+    assert SUPPORT_URL == "https://buymeacoffee.com/carter.bnw"
+    assert RELEASES_URL == "https://github.com/CARTER-BNW/chesspuz/releases"
+    assert __version__ in page.updates_button.toolTip() and __version__ in page.status_label.text()
+    # at the top of the menu: the links row sits right above the page buttons
+    assert page.page_layout.indexOf(page.links_row) == page.page_layout.indexOf(page.nav_row) - 1
+    assert page.links_grid.itemAtPosition(0, 1).widget() is page.updates_button
+
+
 # -- leaderboard and stats -----------------------------------------------------------------------
 
 

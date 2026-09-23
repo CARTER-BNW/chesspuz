@@ -16,6 +16,7 @@ First run: `python main.py import --download` (one-time, about 300 MB) builds th
 - Board: click-click or drag to move, drop the king on its rook to castle, pick the piece when a pawn promotes. Right-drag draws an arrow, right-click highlights a square (Shift/Ctrl/Alt change the colour), any left click clears them.
 - Review: after a run (or from the Leaderboard and History) step through every puzzle, compare your moves with the solution, and play any move to explore; Back to the line returns.
 - Engine (optional): download Stockfish from https://stockfishchess.org, unzip it, and set the executable path in Settings to see the evaluation and best move while exploring in Review.
+- Support the Dev and Check for Updates, above the menu on the home page, open https://buymeacoffee.com/carter.bnw and the Releases page in your browser. The status line at the bottom of the home page shows the version you are running.
 
 ## Install (Windows)
 - Download `chesspuz-<version>-windows.zip` from the Releases page, unzip it anywhere and run `chesspuz.exe`.

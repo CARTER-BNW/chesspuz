@@ -1,11 +1,16 @@
-"""Home page: pick a player and puzzle types, then start a Survival run."""
+"""Home page: pick a player and puzzle types, then start a Survival run.
+
+Above the page menu sit two links that open in the browser: Support the Dev (buy me a coffee)
+and Check for Updates (the GitHub releases page; the tooltip and the status line name the
+version this build is).
+"""
 
 from __future__ import annotations
 
 import sys
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QResizeEvent
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QResizeEvent
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -19,13 +24,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from chesspuz import themes
+from chesspuz import RELEASES_URL, SUPPORT_URL, __version__, themes
 from chesspuz.ui import device
 from chesspuz.ui.app import AppContext
 from chesspuz.ui.responsive import is_compact, make_scroll, reflow_grid, shape_size
 
 DEFAULT_PLAYER = "Player"
 MAX_TYPE_COLUMNS = 3
+
+
+def open_link(url: str) -> bool:
+    """Open ``url`` in the system browser (the phone's default browser on Android)."""
+    return QDesktopServices.openUrl(QUrl(url))
 
 
 class HomePage(QWidget):
@@ -106,6 +116,22 @@ class HomePage(QWidget):
         card_layout.addWidget(self.start_button)
         card.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Maximum)
 
+        # links at the top of the menu: support the developer, look for a newer release
+        self.support_button = QPushButton("Support the Dev")
+        self.support_button.setToolTip(f"Buy me a coffee: {SUPPORT_URL}")
+        self.support_button.clicked.connect(lambda: open_link(SUPPORT_URL))
+        self.updates_button = QPushButton("Check for Updates")
+        self.updates_button.setToolTip(
+            f"You have chesspuz {__version__}. Opens the releases page: {RELEASES_URL}"
+        )
+        self.updates_button.clicked.connect(lambda: open_link(RELEASES_URL))
+        self.link_buttons = [self.support_button, self.updates_button]
+        self.links_grid = QGridLayout()
+        self.links_row = QHBoxLayout()
+        self.links_row.addStretch()
+        self.links_row.addLayout(self.links_grid)
+        self.links_row.addStretch()
+
         self.nav_buttons: list[QPushButton] = []
         for text, signal in (
             ("Leaderboard", self.leaderboard_requested),
@@ -118,10 +144,10 @@ class HomePage(QWidget):
             button.clicked.connect(signal.emit)
             self.nav_buttons.append(button)
         self.nav_grid = QGridLayout()
-        nav = QHBoxLayout()
-        nav.addStretch()
-        nav.addLayout(self.nav_grid)
-        nav.addStretch()
+        self.nav_row = QHBoxLayout()
+        self.nav_row.addStretch()
+        self.nav_row.addLayout(self.nav_grid)
+        self.nav_row.addStretch()
 
         content = QWidget()
         self.page_layout = QVBoxLayout(content)
@@ -130,7 +156,8 @@ class HomePage(QWidget):
         self.page_layout.addSpacing(16)
         self.page_layout.addWidget(card, alignment=Qt.AlignmentFlag.AlignHCenter)
         self.page_layout.addSpacing(12)
-        self.page_layout.addLayout(nav)
+        self.page_layout.addLayout(self.links_row)
+        self.page_layout.addLayout(self.nav_row)
         self.page_layout.addStretch()
         self.page_layout.addWidget(self.status_label)
         outer = QVBoxLayout(self)
@@ -158,6 +185,7 @@ class HomePage(QWidget):
         if (columns, nav_columns) != self._placed:
             self._placed = (columns, nav_columns)
             reflow_grid(self.types_grid, list(self.type_boxes.values()), columns)
+            reflow_grid(self.links_grid, self.link_buttons, 2, row_major=True)
             reflow_grid(self.nav_grid, self.nav_buttons, nav_columns, row_major=True)
 
     def type_columns(self) -> int:
@@ -200,7 +228,9 @@ class HomePage(QWidget):
                 hint = "python main.py import --download, or Settings > Rebuild puzzle database"
             self.status_label.setText(f"No puzzle database yet. Build it once: {hint}")
         else:
-            self.status_label.setText(f"{self.ctx.puzzles.count():,} puzzles loaded")
+            self.status_label.setText(
+                f"{self.ctx.puzzles.count():,} puzzles loaded  ·  chesspuz {__version__}"
+            )
         self._selection_changed()
         self.relayout()
 
