@@ -87,6 +87,8 @@ def main() -> int:
         "android.archs": "arm64-v8a",
         "android.accept_sdk_license": "True",
         "android.allow_backup": "True",
+        # a release build makes an .aab bundle by default, which adb cannot install
+        "android.release_artifact": "apk",
         # keep the .py sources: PySide reads class sources back at runtime (auto properties)
         # and tracebacks in logcat show the failing line
         "android.no-byte-compile-python": "True",

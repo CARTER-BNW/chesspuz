@@ -34,7 +34,13 @@ statistics as the desktop app. The desktop code stays the master; the phone gets
   place from the unpacked app folder; players, runs and settings live in
   `/data/data/org.johncarter.chesspuz/files/chesspuz/user.sqlite`, which survives updates.
   SQLite and `tempfile` get the app's cache dir as temp dir (Android has no `/tmp`).
-- **Sounds**: silent on the phone for now (the desktop backend is winsound).
+- **Sounds**: the same synthesised clips, written as PCM to an AAudio output stream through
+  ctypes (`android/mobile/aaudio.py`); PySide6's Android build has no Java bridge and
+  QtMultimedia would cost 30 MB of ffmpeg.
+- **Size and signing**: the deploy recipe is patched to keep only the Qt the app needs
+  (Core, Gui, Widgets, Svg and the platform plugin with their dependencies); the APK is a
+  signed release build with our own key, because Android shows a "16 KB compatibility" dialog
+  for debuggable apps and `libshiboken6` is 4 KB-aligned.
 
 ## Pipeline
 `python android\sync.py all` = sync (copy `chesspuz/` + `android/mobile/` + the database into
@@ -46,5 +52,8 @@ run -> logcat dump. Details and the toolchain versions: `android/README.md`.
 - [x] `python android\sync.py build` produces `android/bin/chesspuz-<version>-arm64-v8a-debug.apk`
 - [x] the APK installs on the Pixel 9a and starts a Survival run in portrait with the full
       database; Back behaves as above (2026-09-23, checked over adb)
+- [x] release build: signed, trimmed to the Qt in use (70 MB), sounds through AAudio, on the
+      GitHub release v0.2.0 (2026-09-23)
+- [ ] the trimmed release APK checked on the phone (starts, sound audible, no dialog)
 - [ ] a whole run, review and practice play-tested by hand on the phone
 - [x] `python -m pytest -q` covers the portrait layout, the Back key, the entry and the patcher

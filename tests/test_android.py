@@ -204,6 +204,85 @@ def test_entry_prepares_the_phone_folders(tmp_path: Path, monkeypatch) -> None:
     assert paths.data_dir() == private / "chesspuz"
 
 
+def test_aaudio_decodes_and_converts_the_clips() -> None:
+    """The phone's sound path: WAV bytes -> 16-bit PCM at the stream's rate and channels."""
+    import array
+
+    from chesspuz import sounds
+
+    aaudio = _load("mobile_aaudio", ANDROID / "mobile" / "aaudio.py")
+    samples, channels, rate = aaudio.decode_wav(sounds.clip("move", 50))
+    assert (channels, rate) == (1, sounds.RATE)
+    assert len(samples) > 1000 and max(abs(s) for s in samples) > 0
+
+    stereo48 = aaudio.convert(samples, 1, rate, to_channels=2, to_rate=48000)
+    expected_frames = round(len(samples) * 48000 / rate)
+    assert len(stereo48) == expected_frames * 2
+    assert stereo48[0] == stereo48[1]  # the same sample on both channels
+    mono = aaudio.convert(
+        array.array("h", [0, 1000, 0, -1000]), 2, 22050, to_channels=1, to_rate=22050
+    )
+    assert list(mono) == [500, -500]
+
+    # a fake libaaudio records the calls: the stream is opened once and the PCM written in full
+    class FakeLib:
+        def __init__(self) -> None:
+            self.written = 0
+            self.calls: list[str] = []
+
+        def __getattr__(self, name: str):
+            def fn(*args):
+                self.calls.append(name)
+                if name == "AAudioStreamBuilder_openStream":
+                    args[1]._obj.value = 0x1234  # the real library fills in the stream handle
+                if name == "AAudioStream_getSampleRate":
+                    return 48000
+                if name == "AAudioStream_getChannelCount":
+                    return 2
+                if name == "AAudioStream_write":
+                    frames = args[2]
+                    self.written += frames
+                    return frames
+                return 0
+
+            return fn
+
+    lib = FakeLib()
+    player = aaudio.AAudioPlayer(lib=lib)
+    player.play("move", sounds.clip("move", 100))
+    player.play("click", sounds.clip("click", 100))
+    player.stop()
+    player._thread.join(timeout=5)
+    assert player.failed is None
+    assert lib.calls.count("AAudioStreamBuilder_openStream") == 1
+    assert lib.written == expected_frames + round(
+        len(aaudio.decode_wav(sounds.clip("click", 100))[0]) * 48000 / rate
+    )
+    assert lib.calls[-1] == "AAudioStream_close"
+
+
+def test_patch_recipe_reads_the_spec_and_appends_once(tmp_path: Path) -> None:
+    patch_recipe = _load("patch_recipe", ANDROID / "wsl" / "patch_recipe.py")
+    spec = tmp_path / "buildozer.spec"
+    spec.write_text(
+        "[app]\np4a.extra_args = --qt-libs=Gui,Svg,Core,Widgets "
+        "--load-local-libs=plugins_platforms_qtforandroid --init-classes=\n"
+    )
+    recipe = tmp_path / "__init__.py"
+    recipe.write_text(
+        "class PySideRecipe:\n    def build_arch(self, arch):\n        pass\n\n\n"
+        "recipe = PySideRecipe()\n"
+    )
+    assert patch_recipe.main([str(recipe), str(spec)]) == 0
+    text = recipe.read_text()
+    assert "QT_MODULES = ['Gui', 'Svg', 'Core', 'Widgets']" in text
+    assert "LOCAL_LIBS = ['plugins_platforms_qtforandroid']" in text
+    assert "PySideRecipe.build_arch = _chesspuz_build_arch_and_prune" in text
+    assert patch_recipe.main([str(recipe), str(spec)]) == 0  # second run: unchanged
+    assert text == recipe.read_text()
+    compile(text, "recipe", "exec")  # the appended code is valid Python
+
+
 def test_patch_spec_sets_keys_in_their_sections() -> None:
     patch_spec = _load("patch_spec", ANDROID / "wsl" / "patch_spec.py")
     text = "[app]\ntitle = x\n#android.api = 31\nrequirements = python3\n\n"

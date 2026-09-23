@@ -90,8 +90,10 @@ Outcome: the app plays on the phone from an APK built with one command. Spec: do
 - [x] Tests for the portrait layout, the Back key, the entry and the spec patcher; offscreen screenshots at 412x915 checked
 - [x] APK builds: `android/bin/chesspuz-<version>-arm64-v8a-debug.apk` (about 200 MB; first build 9 min, later builds 1-2 min)
 - [x] Installed on the Pixel 9a: starts in portrait with the full database, scrolls by finger, a run starts, Back reaches the app (python-for-android's "click again to close" Java patched out)
-- [ ] Play-tested by John: a whole Survival run, review, mistakes practice, settings
-- [ ] Later: trim unused Qt libraries from the APK (removes Android's 16 KB compatibility warning on debug installs and most of the size), sounds on the phone
+- [x] Unused Qt trimmed from the APK (197 MB -> 70 MB) and a signed release build (own key, no debug "16 KB compatibility" dialog)
+- [x] Sounds on the phone through AAudio (ctypes), no extra libraries
+- [x] Release v0.2.0 on GitHub: Windows zip + Android APK
+- [ ] The trimmed release APK run on the Pixel 9a (sound audible, no dialog); then play-tested by John: a whole Survival run, review, mistakes practice, settings
 Done when: `python android\sync.py all` installs the APK and a Survival run plays through in portrait on the phone.
 
 ## Decisions
@@ -117,3 +119,6 @@ Done when: `python android\sync.py all` installs the APK and a Survival run play
 - 2026-09-23: python-for-android is pinned to commit 3762c88c (2025-10-26, CPython 3.11.13) - the Qt Android wheels link libpython3.11.so and p4a's current release builds 3.14
 - 2026-09-23: one code base, pages shaped by window size (portrait = board above a scrolling panel) instead of a separate phone UI - the desktop stays the master and a narrow desktop window previews the phone
 - 2026-09-23: the puzzle database ships inside the APK (40 MB compressed) rather than being downloaded on the phone - no zstandard or 300 MB download on the device; user data lives outside the app folder so updates keep it
+- 2026-09-23: phone sound goes through Android's AAudio C API via ctypes - PySide6's Android build has no QJniObject and QtMultimedia would add 30 MB of ffmpeg
+- 2026-09-23: the APK is a signed release build with our own key (backed up in D:\Claude\secrets) - Android's "16 KB compatibility" dialog only shows for debuggable apps, and libshiboken6's 4 KB alignment cannot be fixed on our side
+- 2026-09-23: the generated PySide6 recipe is patched to keep only the Qt the app uses - the deploy tool packs every Qt module (197 MB APK); the dependency closure is computed with llvm-readobj so nothing needed goes missing

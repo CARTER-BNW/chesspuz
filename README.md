@@ -25,12 +25,14 @@ First run: `python main.py import --download` (one-time, about 300 MB) builds th
 - `build_release.bat` builds `dist\chesspuz\chesspuz.exe` and `dist\chesspuz-<version>-windows.zip` (icon from `tools\make_icon.py`, spec in `chesspuz.spec`).
 
 ## Android
-The same app runs on a phone (portrait: board above a scrolling panel; the Back key steps back
-instead of quitting; the puzzle database travels inside the APK). `python android\sync.py all`
-syncs the code, builds the APK in the WSL box and installs it over USB; the pipeline, the
-toolchain and the phone controls are in [android/README.md](android/README.md), the design in
-[docs/specs/android.md](docs/specs/android.md). `python android\app\main.py --desktop` shows the
-phone layout in a window on the PC.
+The same app runs on a phone (portrait: board above a scrolling panel; finger scrolling; the
+Back key steps back instead of quitting; sounds through Android's AAudio; the puzzle database
+travels inside the APK). Install: download `chesspuz-<version>-arm64-v8a-release.apk` from the
+Releases page onto the phone and open it (allow installs from that source when asked).
+`python android\sync.py all` syncs the code, builds the signed APK in the WSL box and installs
+it over USB; the pipeline, the toolchain and the phone controls are in
+[android/README.md](android/README.md), the design in [docs/specs/android.md](docs/specs/android.md).
+`python android\app\main.py --desktop` shows the phone layout in a window on the PC.
 
 ## Commands
 - Run: double-click `run.bat` (or `python main.py`; `run.bat --console` shows errors)

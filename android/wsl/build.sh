@@ -91,13 +91,30 @@ python "$WORK/wsl/patch_spec.py" buildozer.spec \
     --p4a-commit "$P4A_PIN" \
     --p4a-source-dir "$P4A_SRC" \
     --bin-dir "$WORK/bin"
+# only the Qt the app uses goes into the APK (see wsl/patch_recipe.py); when the pruning step is
+# new, the Python recipes must run again and the dist be recreated
+PRUNE_RESULT=$(python "$WORK/wsl/patch_recipe.py" deployment/recipes/PySide6/__init__.py buildozer.spec)
+echo "$PRUNE_RESULT"
+case "$PRUNE_RESULT" in
+    patched:*)
+        rm -rf "$BUILD_DIR/build/python-installs/chesspuz" "$BUILD_DIR/dists/chesspuz"
+        echo "== python recipes will run again (site-packages and dist removed) =="
+        ;;
+esac
 echo "== buildozer.spec (effective, uncommented lines) =="
 grep -v -E '^\s*(#|$)' buildozer.spec
 mkdir -p "$WORK/bin" "$SRC/bin"
 rm -f "$WORK"/bin/*.apk  # only this build's APK gets copied back
-echo "== buildozer android debug  (work dir $WORK/app) =="
+if [ "$MODE" = "release" ]; then
+    # signed with our own key (wsl/keystore.sh made it; the password lives only in the box and
+    # in D:\Claude\secrets): not debuggable, so no "app compatibility" dialog on install
+    # shellcheck disable=SC1090
+    source "$HOME/chesspuz-release.env"
+    export P4A_RELEASE_KEYSTORE P4A_RELEASE_KEYSTORE_PASSWD P4A_RELEASE_KEYALIAS_PASSWD P4A_RELEASE_KEYALIAS
+fi
+echo "== buildozer android $MODE  (work dir $WORK/app) =="
 set +e
-buildozer android debug 2>&1 | tee "$WORK/build.log"
+buildozer android "$MODE" 2>&1 | tee "$WORK/build.log"
 STATUS=${PIPESTATUS[0]}
 set -e
 if [ "$STATUS" -ne 0 ]; then

@@ -7,15 +7,16 @@ USB phone.
     python android\\sync.py all              sync + build + install + run + logs
     python android\\sync.py setup            one-time: toolchain in the WSL box (uv, Python 3.11,
                                             PySide6 deploy tool, Qt Android wheels)
-    python android\\sync.py build            build the APK (first time ~30 min: CPython 3.11 and
-                                            friends are compiled; later a few minutes)
+    python android\\sync.py build            build the signed release APK (--debug: a debuggable
+                                            one); the first build compiles CPython 3.11 and
+                                            friends (~10 min), later ones take a few minutes
     python android\\sync.py clean build      regenerate the buildozer project and rebuild
     python android\\sync.py install run      adb install + launch on the phone
     python android\\sync.py logs             app lines from logcat  (--follow 20 = 20 s live)
     python android\\sync.py status           what is set up, connected and built
 
 Options: --version X.Y.Z (else the patch number bumps on every sync), --no-bump, --no-db
-         (leave the puzzle database out), --db PATH (bundle this database), --serial S,
+         (leave the puzzle database out), --db PATH (bundle this database), --debug, --serial S,
          --follow N, --verbose (every build line; android/build.log always has everything).
 Windows-side helper: stdlib plus PySide6 (draws the icon, present for the app anyway).
 """
@@ -278,6 +279,10 @@ def step_setup(args) -> None:
     rc = wsl_bash("setup.sh", verbose=True)
     if rc:
         raise SystemExit(f"setup failed ({rc})")
+    log("release signing key (created once, backed up to D:\\Claude\\secrets)")
+    rc = wsl_bash("keystore.sh", verbose=True)
+    if rc:
+        raise SystemExit(f"keystore setup failed ({rc})")
 
 
 def step_build(args) -> None:
@@ -289,7 +294,7 @@ def step_build(args) -> None:
     log(f"building in {DISTRO} (log: android/build.log)")
     rc = wsl_bash(
         "build.sh",
-        {"CP_SRC": wsl_path(AND), "CP_MODE": "debug"},
+        {"CP_SRC": wsl_path(AND), "CP_MODE": "debug" if args.debug else "release"},
         logfile=AND / "build.log",
         verbose=args.verbose,
     )
@@ -342,7 +347,13 @@ def step_install(args) -> None:
             f"phone not ready: {state} (accept the USB debugging prompt on the phone, then retry)"
         )
     log(f"installing {apk.name} on {serial}")
-    out = adb("install", "-r", "-d", str(apk), serial=serial)
+    out = adb("install", "-r", "-d", str(apk), serial=serial, check=False)
+    if "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in out:
+        # the installed app was signed with another key (debug build vs release build):
+        # Android refuses the update, so the old app goes, and its runs and settings with it
+        log("signed with another key than the installed app: uninstalling it (phone data is lost)")
+        print(adb("uninstall", PACKAGE, serial=serial, check=False).strip())
+        out = adb("install", "-r", "-d", str(apk), serial=serial, check=False)
     print(out.strip())
     if "Success" not in out:
         raise SystemExit("adb install did not report Success")
@@ -427,6 +438,7 @@ def main(argv=None) -> int:
     p.add_argument("--no-bump", action="store_true", help="keep the current VERSION on sync")
     p.add_argument("--no-db", action="store_true", help="do not bundle the puzzle database")
     p.add_argument("--db", default=None, help="bundle this puzzle database (default: the app's)")
+    p.add_argument("--debug", action="store_true", help="build a debuggable APK (default: release)")
     p.add_argument("--serial", default=None, help="adb device serial")
     p.add_argument("--follow", type=int, default=0, help="logs: follow logcat for N seconds")
     p.add_argument("--verbose", action="store_true", help="build: print every line")

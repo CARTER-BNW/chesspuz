@@ -38,6 +38,18 @@ def prepare_environment(private_dir: Path, app_dir: Path) -> dict[str, Path]:
     return {"data": data, "cache": cache, "puzzles": app_dir / "puzzles.sqlite"}
 
 
+def _phone_sounds() -> None:
+    """Route the app's sound clips to Android's AAudio output (silent if that fails)."""
+    try:
+        from chesspuz import sounds
+        from mobile import aaudio
+
+        sounds.player.backend = aaudio.backend()
+        print("chesspuz: sounds through AAudio", flush=True)
+    except Exception as exc:  # noqa: BLE001 (sound is optional)
+        print(f"chesspuz: no phone sound ({exc!r})", flush=True)
+
+
 def _build_info() -> str:
     try:
         from mobile import build_info
@@ -67,6 +79,8 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as exc:  # noqa: BLE001 (diagnostics only)
         print(f"chesspuz: no fault handler ({exc!r})", flush=True)
     print(f"chesspuz {_build_info()} starting; data in {where['data']}", flush=True)
+    if is_android():
+        _phone_sounds()
     try:
         from chesspuz.ui import app as ui_app
 
