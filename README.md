@@ -4,6 +4,16 @@ A dark-mode desktop chess puzzle trainer with a chess.com-style Survival mode: t
 
 First run: `python main.py import --download` (one-time, about 300 MB) builds the puzzle database in `%LOCALAPPDATA%/chesspuz`, or press "Rebuild puzzle database" in Settings.
 
+## Screenshots
+<p align="center"><img src="docs/screenshots/desktop-run.png" alt="A Survival run on the desktop" width="800"></p>
+<p align="center">
+<img src="docs/screenshots/phone-home.png" alt="Home on the phone" width="210">
+<img src="docs/screenshots/phone-run.png" alt="A run on the phone" width="210">
+<img src="docs/screenshots/phone-paused.png" alt="Paused" width="210">
+</p>
+
+Review, leaderboard, stats, mistakes and settings on both shapes: [docs/screenshots](docs/screenshots).
+
 ## How to play
 - Home: pick a player name and the puzzle types, then Start Survival. Puzzles begin around rating 600 and climb 40 points per solved puzzle (adjustable in Settings). End run keeps the score.
 - Mistakes: the first wrong move on a puzzle costs a life, but the puzzle stays on the board. Keep trying, press Show solution to see the line, or Next to move on. Losing every life (three by default, 1-10 in Settings) ends the run after the current puzzle. Every puzzle you got wrong lands on the Mistakes page, where Practise replays them with no lives or score until they are fixed.
