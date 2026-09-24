@@ -178,7 +178,7 @@ class CompactWatcher(QObject):
         host.installEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 (Qt override)
-        if watched is self.host and event.type() == QEvent.Type.Resize:
+        if watched is getattr(self, "host", None) and event.type() == QEvent.Type.Resize:
             self.relayout()
         return False
 
@@ -229,7 +229,7 @@ class BoardPanelLayout(QObject):
         host.installEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:  # noqa: N802 (Qt override)
-        if watched is self.host and event.type() == QEvent.Type.Resize:
+        if watched is getattr(self, "host", None) and event.type() == QEvent.Type.Resize:
             self.relayout()
         return False
 

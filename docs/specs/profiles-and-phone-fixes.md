@@ -32,6 +32,15 @@ Status: built 2026-09-23 (version 0.4.0), waiting for John's phone check.
   the press point is a click and keeps the selection; `drag_enabled` (setting `drag_pieces`,
   "Drag pieces to move" in Settings > Board, default on) turns dragging off entirely.
 
+- Feature 3 (0.4.1): Show solution one move at a time. Setting `solution_mode` ("line",
+  default, or "step") in Settings > Difficulty. In step mode the button reads "Show next move":
+  `PuzzleSession.reveal_next()` applies the expected solver move and the opponent's reply,
+  marks the session failed (the moves played before asking are the record, frozen like a
+  first mistake) and keeps it open; `SurvivalRun.reveal_next()` charges the life on the first
+  reveal only. The run page and the puzzle window animate the two moves, then return to
+  solving with "<move> was the move. Find the next one, or show it too."; when the shown move
+  ends the line the session closes as REVEALED and the usual "Solution shown" state follows.
+
 ## Out of scope
 - Android cloud Auto Backup rules (`android:fullBackupContent`): plausible but unverifiable
   without the phone and a Google backup round trip; noted as a follow-up.

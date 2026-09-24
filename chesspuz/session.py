@@ -163,6 +163,34 @@ class PuzzleSession:
         self.last_reply = None
         return moves
 
+    def reveal_next(self) -> list[chess.Move]:
+        """Show only the next move of the solution: apply the expected solver move and the
+        opponent's reply that follows it, and keep the session open so the player can find the
+        rest. Counts as a failure like ``reveal``; the moves played before asking are the record.
+        Returns the moves applied; the session closes as REVEALED when the line ends here.
+        """
+        if self.status is not Status.PLAYING:
+            return []
+        if not self.failed:
+            self.failed = True
+            self._failed_line = [m.uci() for m in self.played]
+        move = self.expected
+        assert move is not None
+        self.board.push(move)
+        self.played.append(move)
+        self._index += 1
+        self.last_reply = None
+        if self._index >= len(self.puzzle.moves) or self.board.is_checkmate():
+            self._index = len(self.puzzle.moves)
+            self.status = Status.REVEALED
+            return [move]
+        reply = self.board.parse_uci(self.puzzle.moves[self._index])
+        self.board.push(reply)
+        self.played.append(reply)
+        self._index += 1
+        self.last_reply = reply
+        return [move, reply]
+
     def _solved(self) -> Outcome:
         self.status = Status.SOLVED
         self.last_reply = None

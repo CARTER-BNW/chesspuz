@@ -231,8 +231,10 @@ class MainWindow(QMainWindow):
             board.show_coordinates = coordinates
             board.drag_enabled = drag_pieces
             board.set_colors(light, dark)
+        solution_step = self.ctx.setting("solution_mode", "line") == "step"
         for widget in (self.run_page, *self.windows):
             widget.refresh_styles()
+            widget.set_solution_step(solution_step)
         self.review.set_engine(self.ctx.setting("engine_path", ""))
         sounds.player.enabled = self.ctx.setting("sounds", "1") == "1"
         for name in sounds.NAMES:

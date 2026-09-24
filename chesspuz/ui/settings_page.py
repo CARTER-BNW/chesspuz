@@ -41,6 +41,7 @@ from chesspuz.ui.workers import ImportWorker
 
 DEFAULTS = {
     "lives": DEFAULT_LIVES,
+    "solution_mode": "line",  # or "step": Show solution reveals one move at a time
     "start_rating": RampSettings().start,
     "step": RampSettings().step,
     "window": RampSettings().window,
@@ -160,9 +161,18 @@ class SettingsPage(QWidget):
         self.start_spin = self._spin(400, 2600, 50)
         self.step_spin = self._spin(0, 200, 5)
         self.window_spin = self._spin(25, 400, 25)
+        self.solution_box = QComboBox()
+        self.solution_box.addItem("The whole line", "line")
+        self.solution_box.addItem("One move at a time", "step")
+        self.solution_box.setToolTip(
+            "What Show solution does: replay the whole line, or reveal only the next move and "
+            "let you find the rest (each press shows one more; the life is lost once either way)"
+        )
+        self.solution_box.currentIndexChanged.connect(self._save)
         difficulty = QGroupBox("Difficulty")
         form = self._form(difficulty)
         form.addRow(f"Lives per run ({MIN_LIVES}-{MAX_LIVES})", self.lives_spin)
+        form.addRow("Show solution", self.solution_box)
         form.addRow("First puzzle rating", self.start_spin)
         form.addRow("Rating step per solved puzzle", self.step_spin)
         form.addRow("Rating window (+/-)", self.window_spin)
@@ -394,6 +404,8 @@ class SettingsPage(QWidget):
     def refresh(self) -> None:
         self._loading = True
         self.lives_spin.setValue(self.ctx.lives())
+        step = self.ctx.setting("solution_mode", DEFAULTS["solution_mode"]) == "step"
+        self.solution_box.setCurrentIndex(1 if step else 0)
         self.start_spin.setValue(self.ctx.int_setting("start_rating", DEFAULTS["start_rating"]))
         self.step_spin.setValue(self.ctx.int_setting("step", DEFAULTS["step"]))
         self.window_spin.setValue(self.ctx.int_setting("window", DEFAULTS["window"]))
@@ -424,6 +436,7 @@ class SettingsPage(QWidget):
         if self._loading:
             return
         self.ctx.set_setting("lives", str(self.lives_spin.value()))
+        self.ctx.set_setting("solution_mode", str(self.solution_box.currentData()))
         self.ctx.set_setting("start_rating", str(self.start_spin.value()))
         self.ctx.set_setting("step", str(self.step_spin.value()))
         self.ctx.set_setting("window", str(self.window_spin.value()))

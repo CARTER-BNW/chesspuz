@@ -59,6 +59,8 @@ class PuzzleWindow(QWidget):
         self._generation = 0
         self._phase = "idle"
         self._playback: list[chess.Move] = []
+        self.solution_step = False  # Show solution reveals one move at a time (a setting)
+        self._shown_san = ""
         self._started: float | None = None
         self._elapsed = 0.0
 
@@ -206,10 +208,31 @@ class PuzzleWindow(QWidget):
         self.board.set_interactive(True)
         self._update_actions()
 
+    def set_solution_step(self, on: bool) -> None:
+        """Show solution replays the whole line (off) or reveals one move at a time (on)."""
+        self.solution_step = on
+        self.solution_button.setText("Show next move" if on else "Show solution")
+
     def show_solution(self) -> None:
         if self._phase != "solving" or self.session is None:
             return
         session = self.session
+        if self.solution_step:
+            if self.recording and self.run is not None:
+                moves = self.run.reveal_next()
+            else:
+                moves = session.reveal_next()
+            if not moves:
+                return
+            self.board.set_interactive(False)
+            self._shown_san = self.board.board.san(moves[0])
+            self._playback = list(moves)
+            self._phase = "playback"
+            self._set_banner("Here is the next move.", "muted")
+            self._settle_record()
+            self._update_actions()
+            self._playback_step()
+            return
         if self.recording and self.run is not None:
             moves = self.run.reveal_solution()
         else:
@@ -229,6 +252,16 @@ class PuzzleWindow(QWidget):
         if self._playback:
             self.board.play_move(self._playback.pop(0))
             return
+        if self.session is not None and self.session.status is Status.PLAYING:
+            # one move was shown and the line goes on: back to solving
+            self._phase = "solving"
+            self.board.set_interactive(True)
+            self._set_banner(
+                f"{self._shown_san} was the move. Find the next one, or show it too.", "muted"
+            )
+            self._update_actions()
+            return
+        self._ticker.stop()
         self._phase = "done"
         self._set_banner("Solution shown. Try again or close.", "muted")
         self._update_actions()

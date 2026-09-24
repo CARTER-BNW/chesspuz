@@ -16,9 +16,12 @@ from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMessageBox, QScroller
 
 from chesspuz import backup
+from chesspuz.run import SurvivalRun
+from chesspuz.session import Outcome, PuzzleSession, Status
 from chesspuz.ui import responsive
 from chesspuz.ui.app import AppContext, MainWindow
 from chesspuz.ui.board import BoardWidget, InputState
+from chesspuz.ui.puzzle_window import PuzzleWindow
 from chesspuz.ui.review_page import ReviewPage
 from chesspuz.ui.run_page import RunPage
 from chesspuz.ui.settings_page import SettingsPage, color_pickers, make_color_dialog
@@ -26,7 +29,7 @@ from chesspuz.userdb import ABANDONED, PRACTICE, UserDB
 from tests import puzzles
 from tests.test_board import LEFT, NONE, center, click, drag, send
 from tests.test_pages import ctx  # noqa: F401 (fixture)
-from tests.test_run import FakeClock
+from tests.test_run import FakeClock, FakePool
 from tests.test_userdb import finished_run
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -434,3 +437,109 @@ def test_drag_setting_reaches_every_board(ctx: AppContext, qtbot) -> None:  # no
     assert not window.run_page.board.drag_enabled and not window.review.board.drag_enabled
     window.settings._reset()
     assert window.run_page.board.drag_enabled and window.settings.drag_box.isChecked()
+
+
+# -- feature 3: show the solution one move at a time --------------------------------------------
+
+
+def test_session_reveals_one_move_and_keeps_going() -> None:
+    s = PuzzleSession(puzzles.SMOTHERED)
+    shown = s.reveal_next()
+    assert [m.uci() for m in shown] == ["c4g8", "f8g8"]
+    assert s.status is Status.PLAYING and s.failed and s.moves_left == 1
+    assert s.player_line() == []  # nothing was played before asking: that is the record
+    assert s.expected == chess.Move.from_uci("h6f7")
+    assert s.try_move(chess.Move.from_uci("h6f7")) is Outcome.COMPLETE
+    assert s.status is Status.SOLVED and s.failed and s.player_line() == []
+
+    s = PuzzleSession(puzzles.SMOTHERED)
+    assert s.try_move(chess.Move.from_uci("c4c8")) is Outcome.WRONG
+    s.reveal_next()
+    assert s.player_line() == ["c4c8"]  # the first mistake stays the record
+    last = s.reveal_next()
+    assert [m.uci() for m in last] == ["h6f7"]
+    assert s.status is Status.REVEALED and s.board.is_checkmate()
+    assert s.reveal_next() == [] and s.reveal() == []
+
+
+def test_run_charges_one_life_for_the_first_shown_move_only() -> None:
+    results: list = []
+    run = SurvivalRun(["Mate in 2"], FakePool([puzzles.SMOTHERED]).pick, on_result=results.append)
+    run.next_puzzle()
+    assert len(run.reveal_next()) == 2
+    assert run.lives_left == 2 and len(results) == 1 and results[-1].solved is False
+    assert results[-1].player_moves == [] and run.settled
+    assert run.try_move(chess.Move.from_uci("h6f7")) is Outcome.COMPLETE
+    assert run.score == 0 and len(results) == 1 and run.lives_left == 2
+    assert run.reveal_next() == []
+    run.next_puzzle()
+    run.reveal_next()
+    assert [m.uci() for m in run.reveal_next()] == ["h6f7"]
+    assert run.lives_left == 1 and len(results) == 2  # the second press is free
+
+
+def test_run_page_shows_the_next_move_then_hands_the_board_back(ctx: AppContext, qtbot) -> None:  # noqa: F811
+    page = RunPage(ctx, animation_ms=0, tempo=0)
+    qtbot.addWidget(page)
+    page.set_solution_step(True)
+    assert page.solution_button.text() == "Show next move"
+    player = ctx.users.get_or_create_player("Alice")
+    run_id, run = ctx.users.new_run(player.id, ["Mate in 2"], ctx.puzzles.pick)
+    page.start(run_id, run, player)
+    qtbot.waitUntil(lambda: page._phase == "solving", timeout=3000)
+    assert page.session.moves_left == 2
+    page.solution_button.click()
+    qtbot.waitUntil(lambda: page._phase == "solving", timeout=3000)
+    assert page.session.status is Status.PLAYING and page.session.moves_left == 1
+    assert run.lives_left == 2 and len(run.results) == 1 and run.settled
+    assert "was the move" in page.banner.text()
+    assert page.solution_button.isEnabled() and page.next_button.isEnabled()
+    assert page.board.board.fen() == page.session.board.fen()
+    page.solution_button.click()  # the last move: the line ends, no second charge
+    qtbot.waitUntil(lambda: page._phase == "done", timeout=3000)
+    assert page.session.status is Status.REVEALED and run.lives_left == 2
+    assert "Solution shown" in page.banner.text()
+    page.next_button.click()
+    qtbot.waitUntil(lambda: page._phase == "solving", timeout=3000)
+    page.solution_button.click()
+    qtbot.waitUntil(lambda: page._phase == "solving", timeout=3000)
+    page.board.move_played.emit(page.session.expected)  # finish it by hand after the hint
+    assert page.session.status is Status.SOLVED and "after a mistake" in page.banner.text()
+    assert run.score == 0 and run.lives_left == 1
+
+
+def test_puzzle_window_shows_one_move_at_a_time(ctx: AppContext, qtbot) -> None:  # noqa: F811
+    player = ctx.users.get_or_create_player("Alice")
+    window = PuzzleWindow(ctx, player, puzzles.SMOTHERED, animation_ms=0, tempo=0)
+    qtbot.addWidget(window)
+    window.set_solution_step(True)
+    qtbot.waitUntil(lambda: window._phase == "solving", timeout=3000)
+    window.show_solution()
+    qtbot.waitUntil(lambda: window._phase == "solving", timeout=3000)
+    assert window.session.moves_left == 1 and "was the move" in window.banner.text()
+    assert not window.recording  # the practice record is settled as failed
+    assert ctx.users.history(player.id)[0].puzzles_played == 1
+    window.show_solution()
+    qtbot.waitUntil(lambda: window._phase == "done", timeout=3000)
+    assert window.session.status is Status.REVEALED
+    window.close()
+
+
+def test_solution_setting_reaches_the_run_page_and_windows(ctx: AppContext, qtbot) -> None:  # noqa: F811
+    window = MainWindow(ctx)
+    qtbot.addWidget(window)
+    assert not window.run_page.solution_step
+    window.settings.refresh()
+    assert window.settings.solution_box.currentData() == "line"
+    window.settings.solution_box.setCurrentIndex(1)  # saves and re-applies
+    assert ctx.setting("solution_mode", "line") == "step"
+    assert (
+        window.run_page.solution_step and window.run_page.solution_button.text() == "Show next move"
+    )
+    window.open_puzzle_window(puzzles.BACK_RANK)
+    assert window.windows[-1].solution_step
+    window.settings._reset()
+    assert not window.run_page.solution_step and not window.windows[-1].solution_step
+    assert window.run_page.solution_button.text() == "Show solution"
+    for puzzle_window in list(window.windows):
+        puzzle_window.close()

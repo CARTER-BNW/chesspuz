@@ -223,6 +223,16 @@ class SurvivalRun:
             self._finish(solved=False)
         return moves
 
+    def reveal_next(self) -> list[chess.Move]:
+        """Show only the next move of the solution; costs a life unless already failed."""
+        if self.session is None or self.session.status is not Status.PLAYING:
+            return []
+        was_failed = self.session.failed
+        moves = self.session.reveal_next()
+        if not was_failed:
+            self._finish(solved=False)
+        return moves
+
     def quit(self) -> None:
         """End the run early; an unfinished puzzle is not counted."""
         if not self.finished:
