@@ -1,19 +1,24 @@
 # STATUS - chesspuz
-last_updated: 2026-09-23
-phase: 0.4.0 released (feedback round 4 = Phase 11: profile export/import, data across updates, colour picker from black, phone Review scrolling, run.bat fix). John approved the round on the desktop; the phone check is still open.
+last_updated: 2026-09-24
+phase: 0.4.1 built (a wobbly click no longer drags the piece to the next square; "Drag pieces to move" switch in Settings > Board) and waiting as a DRAFT release for John's word. 0.4.0 (Phase 11: profile export/import, data across updates, colour picker from black, phone Review scrolling, run.bat fix) is the public Latest. The phone check of 0.4.x is still open.
 
 ## Next action
-- Ask John what the Pixel 9a says about 0.4.0 (installed from the Releases page over 0.3.1, data kept): Review page (puzzle list under the board scrolls alone, no page jump), Settings > Data > Export profile (Android's file picker, save to Download or Drive), Import profile (pick the file back), and whether `Download/chesspuz/chesspuz-profiles.json` appears after a run (the auto copy; a `chesspuz: no backup copy` line in `python android\sync.py logs` if not). Anything he reports = round 5 = Phase 12: spec note if bigger than a fix, implement, tests, ruff, screenshots if the UI changed, builds, release with the recipe below.
+- John tries 0.4.1 on Windows (draft page https://github.com/CARTER-BNW/chesspuz/releases/tag/untagged-e86954ffb48b7e7544db, visible to him while logged in; or `run.bat` from main): clicks near square edges must select, not move; a real drag still moves; Settings > Board > Drag pieces off = click-click only. On his "looks good": `gh release edit v0.4.1 --draft=false --latest` (the tag v0.4.1 is created then, at main's tip), then he posts the link. If he reports more, that is round 5 = Phase 12.
+- Ask John what the Pixel 9a says about 0.4.x (installed from the Releases page over 0.3.1, data kept): Review page (puzzle list under the board scrolls alone, no page jump), Settings > Data > Export profile (Android's file picker, save to Download or Drive), Import profile (pick the file back), and whether `Download/chesspuz/chesspuz-profiles.json` appears after a run (the auto copy; a `chesspuz: no backup copy` line in `python android\sync.py logs` if not). Anything he reports = round 5 = Phase 12: spec note if bigger than a fix, implement, tests, ruff, screenshots if the UI changed, builds, release with the recipe below.
 
 ## Blockers
 - none. Unverified on a device: Qt's native Android file dialog (SAF, content:// locations) behind Export/Import, and writing to the public Download folder without a permission (Android 11+ should allow it; the code skips the copy with a log line if not).
 
 ## Where things are
-- Code: main, all pushed. Version 0.4.0 in `chesspuz/__init__.py`, `pyproject.toml`, `android/VERSION`. 181 tests green, ruff clean.
+- Code: main, all pushed (ba40573). Version 0.4.1 in `chesspuz/__init__.py`, `pyproject.toml`, `android/VERSION`. 185 tests green, ruff clean.
+- Draft release v0.4.1 (untagged until published): `chesspuz-0.4.1-windows.zip` (smoke-tested offscreen), `chesspuz-0.4.1-arm64-v8a-release.apk` (build stamp ba40573), `chesspuz-0.4.1-readme.pdf` (10 pages), notes `build/release-notes-0.4.1.md` ("New in 0.4.1" above "New in 0.4.0").
 - Release v0.4.0 (Latest, https://github.com/CARTER-BNW/chesspuz/releases/tag/v0.4.0): `chesspuz-0.4.0-windows.zip` (smoke-tested offscreen), `chesspuz-0.4.0-arm64-v8a-release.apk` (build stamp 2a62102, 70.5 MB; the app code at the tag is the built code, the later commits are docs and run.bat), `chesspuz-0.4.0-readme.pdf` (10 pages, from the final README), notes = the sharing page with a "New in 0.4.0" section (`build/release-notes-0.4.0.md`). Earlier: v0.3.1, v0.3.0, v0.2.0 (last one John confirmed on the phone), v0.1.0.
 - Spec of this round: `docs/specs/profiles-and-phone-fixes.md`. Tests: `tests/test_round4.py`.
 - Screenshots regenerated at both shapes (the phone review and run shots show the pinned lists); the README has a "Your data across updates" section and the profiles bullet.
 - Sharing: nothing John shares may contain em dashes (checked: none in README, notes, spec).
+
+## Built on 2026-09-24 (0.4.1)
+- John's report after 0.4.0: "sometimes when I click on a piece it holds it for too long and thinks I'm drag moving, and it misplaces the piece". Cause in `chesspuz/ui/board.py`: a press became a drag after 4 px of movement, so a wobbly click near a square's edge was released on the neighbouring square and, when that square was legal, the piece moved there (a wrong move costs a life). Fix: `drag_threshold()` = max(10 px, `QApplication.startDragDistance()`, a quarter square); in `mouseReleaseEvent` a release closer than that to the press point is a click and keeps the selection; `BoardWidget.drag_enabled` (setting `drag_pieces`, checkbox "Drag pieces to move" in Settings > Board, applied by `MainWindow.apply_settings` to every board incl. puzzle windows, default on, covered by Reset) turns dragging off for click-click play. Tests in `tests/test_round4.py` ("bug 3"): a 6 px wobble across the edge keeps the selection, a real drag moves, a drag that returns is a click, click-only mode, the setting reaches every board. Spec note added to `docs/specs/profiles-and-phone-fixes.md`.
 
 ## Built in this session (2026-09-23 evening)
 - Bug 1 (Windows, black colour): Qt's colour dialog keeps the HSV brightness and black has none, so the hue/saturation square never changed anything. `settings_page.make_color_dialog` installs an event filter on the private `QtPrivate::QColorPicker` child: a press while the colour is black first sets full brightness. Proven offscreen with QTest (`#000000` -> a real colour, `#101010` keeps 16).

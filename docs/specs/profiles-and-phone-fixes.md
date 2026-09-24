@@ -24,6 +24,14 @@ Status: built 2026-09-23 (version 0.4.0), waiting for John's phone check.
   phone also writes an automatic copy of the profiles file to `Download/chesspuz/` after every
   run, which survives an uninstall and can be imported from Settings afterwards.
 
+- Bug 3 (0.4.1, reported after the 0.4.0 release): a click sometimes "held the piece too long",
+  turned into a drag and dropped it on the wrong square. Cause: a press became a drag after 4
+  pixels, so a wobbly click near a square's edge was released on the neighbour and, when that
+  square was legal, moved there (a wrong move in Survival). Fix: `BoardWidget.drag_threshold()`
+  = max(10 px, the platform's drag distance, a quarter square); a release closer than that to
+  the press point is a click and keeps the selection; `drag_enabled` (setting `drag_pieces`,
+  "Drag pieces to move" in Settings > Board, default on) turns dragging off entirely.
+
 ## Out of scope
 - Android cloud Auto Backup rules (`android:fullBackupContent`): plausible but unverifiable
   without the phone and a Google backup round trip; noted as a follow-up.
