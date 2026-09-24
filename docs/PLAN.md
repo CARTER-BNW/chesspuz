@@ -120,6 +120,7 @@ Outcome: John's list after sharing 0.3.1: two bugs and two features, on desktop 
 - [x] Release v0.4.0 published (zip, APK, README PDF, sharing page with "New in 0.4.0"), README with the Releases link and "Your data across updates" (2026-09-23)
 - [x] 0.4.1: a wobbly click no longer drops the piece on the next square (drag threshold = the platform's drag distance or a quarter square; a release near the press keeps the selection); "Drag pieces to move" switch in Settings > Board (off = click-click only). Tests, screenshots, zip + APK + PDF, draft release (2026-09-24)
 - [x] 0.4.1 too: Show solution one move at a time (Settings > Difficulty; `reveal_next` in session and run; Show next move in the run page and the puzzle windows; the life goes once). Tests, screenshots, the draft's zip + APK + PDF and notes replaced (2026-09-24)
+- [x] Release v0.4.1 published as Latest after John's Windows check (2026-09-24)
 - [ ] Phone check by John: Review scrolling, Export to Download, Import after a reinstall, the automatic copy in Download/chesspuz, tapping pieces with the new drag threshold, Show next move
 Done when: the changes are on the phone and in a GitHub release.
 
