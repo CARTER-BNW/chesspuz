@@ -8,8 +8,9 @@ import importlib.util
 import json
 from pathlib import Path
 
+import chess
 import pytest
-from PySide6.QtCore import QPoint, Qt
+from PySide6.QtCore import QEvent, QPoint, QPointF, Qt
 from PySide6.QtGui import QColor
 from PySide6.QtTest import QTest
 from PySide6.QtWidgets import QApplication, QMessageBox, QScroller
@@ -17,11 +18,13 @@ from PySide6.QtWidgets import QApplication, QMessageBox, QScroller
 from chesspuz import backup
 from chesspuz.ui import responsive
 from chesspuz.ui.app import AppContext, MainWindow
+from chesspuz.ui.board import BoardWidget, InputState
 from chesspuz.ui.review_page import ReviewPage
 from chesspuz.ui.run_page import RunPage
 from chesspuz.ui.settings_page import SettingsPage, color_pickers, make_color_dialog
 from chesspuz.userdb import ABANDONED, PRACTICE, UserDB
 from tests import puzzles
+from tests.test_board import LEFT, NONE, center, click, drag, send
 from tests.test_pages import ctx  # noqa: F401 (fixture)
 from tests.test_run import FakeClock
 from tests.test_userdb import finished_run
@@ -360,3 +363,74 @@ def test_entry_names_the_phone_backup_only_on_android(tmp_path: Path, monkeypatc
         expected,
         Path("/storage/emulated/0/Download/chesspuz/chesspuz-profiles.json"),
     )
+
+
+# -- bug 3: a wobbly click is not a drag ---------------------------------------------------------
+
+
+def _board(qtbot) -> BoardWidget:
+    board = BoardWidget(animation_ms=0)
+    qtbot.addWidget(board)
+    board.resize(400, 400)
+    board.show()
+    return board
+
+
+def test_a_wobbly_click_keeps_the_selection_instead_of_dropping(qtbot) -> None:
+    board = _board(qtbot)
+    board.set_position(chess.Board("4k3/8/8/8/8/8/8/4K3 w - - 0 1"))  # every neighbour is legal
+    size = board.square_size()
+    assert board.drag_threshold() >= 10
+    # press near the right edge of e1, release a few pixels further right: already inside f1
+    edge = center(board, chess.E1) + QPointF(size / 2 - 2, 0)
+    beyond = edge + QPointF(6, 0)
+    assert board.square_at(beyond) == chess.F1
+    with qtbot.assertNotEmitted(board.move_played):
+        send(board, QEvent.Type.MouseButtonPress, edge, LEFT, LEFT)
+        send(board, QEvent.Type.MouseMove, beyond, NONE, LEFT)
+        send(board, QEvent.Type.MouseButtonRelease, beyond, LEFT, NONE)
+    assert board.state is InputState.SELECTED  # the king stays selected; the next click decides
+    with qtbot.waitSignal(board.move_played, timeout=1000) as blocker:
+        click(board, chess.F1)
+    assert blocker.args == [chess.Move.from_uci("e1f1")]
+
+
+def test_a_real_drag_still_moves_and_a_returned_drag_is_a_click(qtbot) -> None:
+    board = _board(qtbot)
+    with qtbot.waitSignal(board.move_played, timeout=1000) as blocker:
+        drag(board, chess.E2, chess.E4)
+    assert blocker.args == [chess.Move.from_uci("e2e4")]
+    board.set_position(chess.Board())
+    a = center(board, chess.G1)
+    away = a + QPointF(0, -3 * board.square_size())
+    with qtbot.assertNotEmitted(board.move_played):
+        send(board, QEvent.Type.MouseButtonPress, a, LEFT, LEFT)
+        send(board, QEvent.Type.MouseMove, away, NONE, LEFT)
+        assert board.state is InputState.DRAGGING
+        send(board, QEvent.Type.MouseMove, a + QPointF(2, 2), NONE, LEFT)
+        send(board, QEvent.Type.MouseButtonRelease, a + QPointF(2, 2), LEFT, NONE)
+    assert board.state is InputState.SELECTED
+
+
+def test_click_only_mode_never_drags(qtbot) -> None:
+    board = _board(qtbot)
+    board.drag_enabled = False
+    with qtbot.assertNotEmitted(board.move_played):
+        drag(board, chess.G1, chess.F3)
+    assert board.state is InputState.SELECTED
+    with qtbot.waitSignal(board.move_played, timeout=1000) as blocker:
+        click(board, chess.F3)
+    assert blocker.args == [chess.Move.from_uci("g1f3")]
+
+
+def test_drag_setting_reaches_every_board(ctx: AppContext, qtbot) -> None:  # noqa: F811
+    window = MainWindow(ctx)
+    qtbot.addWidget(window)
+    assert window.run_page.board.drag_enabled and window.review.board.drag_enabled
+    window.settings.refresh()
+    assert window.settings.drag_box.isChecked()
+    window.settings.drag_box.setChecked(False)  # saves, and the window re-applies the settings
+    assert ctx.setting("drag_pieces", "1") == "0"
+    assert not window.run_page.board.drag_enabled and not window.review.board.drag_enabled
+    window.settings._reset()
+    assert window.run_page.board.drag_enabled and window.settings.drag_box.isChecked()

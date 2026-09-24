@@ -31,7 +31,7 @@ from PySide6.QtGui import (
     QPen,
     QPolygonF,
 )
-from PySide6.QtWidgets import QSizePolicy, QWidget
+from PySide6.QtWidgets import QApplication, QSizePolicy, QWidget
 
 from chesspuz import sounds
 from chesspuz.ui import theme
@@ -39,7 +39,7 @@ from chesspuz.ui.annotations import Annotations, Brush, brush_for
 from chesspuz.ui.pieces import PieceCache, shared_pieces
 
 PROMOTION_PIECES = (chess.QUEEN, chess.KNIGHT, chess.ROOK, chess.BISHOP)
-DRAG_THRESHOLD = 4  # pixels before a press becomes a drag
+MIN_DRAG_DISTANCE = 10  # pixels before a press becomes a drag (at least; see drag_threshold)
 
 
 class InputState(Enum):
@@ -83,6 +83,7 @@ class BoardWidget(QWidget):
         self.hint_move: chess.Move | None = None  # e.g. the engine's best move
         self.state = InputState.IDLE
         self.show_coordinates = True
+        self.drag_enabled = True  # off: click the piece, then its target; a press never lifts
         self._interactive = True
         self._selected: chess.Square | None = None
         self._legal_targets: set[chess.Square] = set()
@@ -369,18 +370,26 @@ class BoardWidget(QWidget):
             return
         if not (event.buttons() & Qt.MouseButton.LeftButton):
             return
+        if not self.drag_enabled:
+            return  # click-click only: the selection waits for the second click
         if self.state not in (InputState.SELECTED, InputState.DRAGGING):
             return
         if self._selected is None or self._press_pos is None:
             return
         if (
             self.state is InputState.SELECTED
-            and (pos - self._press_pos).manhattanLength() < DRAG_THRESHOLD
+            and (pos - self._press_pos).manhattanLength() < self.drag_threshold()
         ):
             return
         self.state = InputState.DRAGGING
         self._drag_pos = pos
         self.update()
+
+    def drag_threshold(self) -> int:
+        """How far the pointer must travel before a press is a drag: the platform's drag
+        distance, or a quarter square on a big board. A wobbly click stays a click, so it
+        can never drop the piece on the square next door."""
+        return max(MIN_DRAG_DISTANCE, QApplication.startDragDistance(), self.square_size() // 4)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         pos = event.position()
@@ -404,11 +413,15 @@ class BoardWidget(QWidget):
             return
         target = self.square_at(pos)
         self._drag_pos = None
-        if target is not None and target != self._selected and target in self._legal_targets:
-            self._attempt(self._selected, target)
-        elif target == self._selected:
+        near_press = (
+            self._press_pos is not None
+            and (pos - self._press_pos).manhattanLength() < self.drag_threshold()
+        )
+        if target == self._selected or near_press:
             self.state = InputState.SELECTED  # a click: keep the selection for click-click
             self.update()
+        elif target is not None and target in self._legal_targets:
+            self._attempt(self._selected, target)
         else:
             self._deselect()
 

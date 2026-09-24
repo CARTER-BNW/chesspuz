@@ -175,6 +175,11 @@ class SettingsPage(QWidget):
         self.animation_spin = self._spin(0, 600, 50)
         self.coordinates_box = QCheckBox("Show coordinates")
         self.coordinates_box.toggled.connect(self._save)
+        self.drag_box = QCheckBox("Drag pieces to move (off: click the piece, then its target)")
+        self.drag_box.setToolTip(
+            "Off means a press never lifts the piece: click a piece, then click where it goes"
+        )
+        self.drag_box.toggled.connect(self._save)
         self.color_buttons: dict[str, QPushButton] = {}
         colors = QGridLayout()
         for row, (key, (label, _default)) in enumerate(COLOR_KEYS.items()):
@@ -203,6 +208,7 @@ class SettingsPage(QWidget):
         board_form = self._form(board)
         board_form.addRow("Move animation (ms)", self.animation_spin)
         board_form.addRow("", self.coordinates_box)
+        board_form.addRow("", self.drag_box)
         board_form.addRow("Colours", self.board_row)
 
         # sounds
@@ -393,6 +399,7 @@ class SettingsPage(QWidget):
         self.window_spin.setValue(self.ctx.int_setting("window", DEFAULTS["window"]))
         self.animation_spin.setValue(self.ctx.int_setting("animation_ms", DEFAULTS["animation_ms"]))
         self.coordinates_box.setChecked(self.ctx.setting("coordinates", "1") == "1")
+        self.drag_box.setChecked(self.ctx.setting("drag_pieces", "1") == "1")
         self.mute_box.setChecked(self.ctx.setting("sounds", "1") != "1")
         for name, slider in self.sliders.items():
             volume = self.ctx.int_setting(f"vol_{name}", 100)
@@ -422,6 +429,7 @@ class SettingsPage(QWidget):
         self.ctx.set_setting("window", str(self.window_spin.value()))
         self.ctx.set_setting("animation_ms", str(self.animation_spin.value()))
         self.ctx.set_setting("coordinates", "1" if self.coordinates_box.isChecked() else "0")
+        self.ctx.set_setting("drag_pieces", "1" if self.drag_box.isChecked() else "0")
         self.ctx.set_setting("sounds", "0" if self.mute_box.isChecked() else "1")
         for name, slider in self.sliders.items():
             self.ctx.set_setting(f"vol_{name}", str(slider.value()))
@@ -436,6 +444,7 @@ class SettingsPage(QWidget):
         for key, value in DEFAULTS.items():
             self.ctx.set_setting(key, str(value))
         self.ctx.set_setting("coordinates", "1")
+        self.ctx.set_setting("drag_pieces", "1")
         self.ctx.set_setting("sounds", "1")
         for name in SOUND_LABELS:
             self.ctx.set_setting(f"vol_{name}", "100")

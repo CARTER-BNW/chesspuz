@@ -219,6 +219,7 @@ class MainWindow(QMainWindow):
             theme.apply_text_size(app, self.ctx.int_setting("text_size", 0))
         animation = self.ctx.animation_ms()
         coordinates = self.ctx.setting("coordinates", "1") == "1"
+        drag_pieces = self.ctx.setting("drag_pieces", "1") == "1"
         light = color_setting(self.ctx, "board_light")
         dark = color_setting(self.ctx, "board_dark")
         shared_pieces.set_piece_colors(
@@ -228,6 +229,7 @@ class MainWindow(QMainWindow):
         for board in boards:
             board.animation_ms = animation
             board.show_coordinates = coordinates
+            board.drag_enabled = drag_pieces
             board.set_colors(light, dark)
         for widget in (self.run_page, *self.windows):
             widget.refresh_styles()
