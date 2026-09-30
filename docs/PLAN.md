@@ -124,6 +124,16 @@ Outcome: John's list after sharing 0.3.1: two bugs and two features, on desktop 
 - [ ] Phone check by John: Review scrolling, Export to Download, Import after a reinstall, the automatic copy in Download/chesspuz, tapping pieces with the new drag threshold, Show next move
 Done when: the changes are on the phone and in a GitHub release.
 
+## Phase 12 - Feedback round 5: the Windows zip ships its puzzle database
+Outcome: a Windows user could not download the database on first start; the release carries it instead, like the APK. Spec: docs/specs/bundled-database.md
+- [x] `paths.app_dir()` / `paths.bundled_puzzle_db_path()`; `AppContext(bundled_db=...)` opens the built database first, then the shipped one; `using_bundled_db` for the pages (2026-09-30)
+- [x] Settings shows which database is open and where a rebuild writes; the frozen build's home hint says to unzip the whole release again
+- [x] `build_release.bat` checks the database with `main.py stats --db` and copies it next to the exe; zip 80.7 MB
+- [x] Tests (tests/test_round5.py, 196 green), ruff clean, README and release notes say "nothing to download" for Windows too
+- [x] Version 0.4.2: zip smoke-tested from a fresh unzip (empty data folder, the exe holds the bundled puzzles.sqlite open), APK built, README PDF, draft release (2026-09-30)
+- [ ] John's Windows check of 0.4.2, then publish (`gh release edit v0.4.2 --draft=false`) and tell the user who reported it
+Done when: the user who reported the problem plays from the zip without a download.
+
 ## Decisions
 - 2026-09-22: scaffolded with the python template - standard layout
 - 2026-09-22: GUI is PySide6 (Fusion + dark scheme) - modern dark theme, real tables, and the SVG pieces bundled with python-chess need no art assets
@@ -138,6 +148,7 @@ Done when: the changes are on the phone and in a GitHub release.
 - 2026-09-23: practice sessions are runs with mode=practice - Review and History work unchanged, leaderboards ignore them
 - 2026-09-23: sounds are synthesised in code and played with winsound - no audio assets, no QtMultimedia (not in PySide6-Essentials)
 - 2026-09-23: per-sound volume is done by re-rendering the clip - winsound has no mixer
+- 2026-09-30: the Windows zip ships puzzles.sqlite next to the exe and the app opens it in place (no copy to the data folder) - a first-start download of 300 MB failed for a user; the APK already worked this way; a rebuilt database in the data folder still wins
 - 2026-09-23: piece colours recolour the SVG body tokens per side; outlines and light details stay - simple and reversible
 - 2026-09-23: a puzzle window records only its first attempt as a one-puzzle practice session; an untouched window leaves no run behind
 - 2026-09-23: best streak shows this run's best and an all-time record computed from run history (no schema change)
