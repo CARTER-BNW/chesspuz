@@ -2,7 +2,7 @@
 
 A dark-mode chess puzzle trainer for Windows and Android with a chess.com-style Survival mode: three lives (1-10 in Settings), no clock, puzzles get harder the more you solve. Review every puzzle of a run move by move, explore alternatives, draw arrows and highlights, and compare runs on local leaderboards. Puzzles come from the free Lichess puzzle database, imported once into a local SQLite file and filtered by the 19 chess.com puzzle types.
 
-First run: `python main.py import --download` (one-time, about 300 MB) builds the puzzle database in `%LOCALAPPDATA%/chesspuz`, or press "Rebuild puzzle database" in Settings.
+The Windows zip and the Android APK ship with all 288,504 puzzles inside, nothing to download. Running from source: `python main.py import --download` (one-time, about 300 MB) builds the puzzle database in `%LOCALAPPDATA%/chesspuz`, or press "Rebuild puzzle database" in Settings.
 
 ## Screenshots
 <p align="center"><img src="docs/screenshots/desktop-run.png" alt="A Survival run on the desktop" width="800"></p>
@@ -31,7 +31,7 @@ Review, leaderboard, stats, mistakes and settings on both shapes: [docs/screensh
 
 ## Install (Windows)
 - Download `chesspuz-<version>-windows.zip` from the [Releases page](https://github.com/CARTER-BNW/chesspuz/releases), unzip it anywhere and run `chesspuz.exe`.
-- First start: open Settings and press "Rebuild puzzle database" (downloads the Lichess puzzle file, about 300 MB, once). Puzzles and your results live in `%LOCALAPPDATA%\chesspuz`.
+- All puzzles are inside the zip (`puzzles.sqlite` next to `chesspuz.exe`), nothing to download: unzip and play. Your results live in `%LOCALAPPDATA%\chesspuz`. Settings > "Rebuild puzzle database" is optional: it downloads the newest Lichess puzzle file (about 300 MB) and builds your own database there, which is used from then on.
 - Optional: download Stockfish from https://stockfishchess.org and set its path in Settings for engine analysis in Review.
 
 ## Your data across updates
@@ -41,7 +41,7 @@ Review, leaderboard, stats, mistakes and settings on both shapes: [docs/screensh
 
 ## Build a release yourself
 - `python -m pip install -r requirements.txt -r requirements-dev.txt pyinstaller`
-- `build_release.bat` builds `dist\chesspuz\chesspuz.exe` and `dist\chesspuz-<version>-windows.zip` (icon from `tools\make_icon.py`, spec in `chesspuz.spec`).
+- `build_release.bat` builds `dist\chesspuz\chesspuz.exe` and `dist\chesspuz-<version>-windows.zip` (icon from `tools\make_icon.py`, spec in `chesspuz.spec`). The zip includes the puzzle database from `%LOCALAPPDATA%\chesspuz\puzzles.sqlite` (or the file named by `CHESSPUZ_DB`), so build it once first with `python main.py import --download`.
 
 ## Android
 The same app runs on a phone (portrait: board above a scrolling panel; finger scrolling; the

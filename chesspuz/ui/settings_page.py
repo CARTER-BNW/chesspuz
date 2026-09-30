@@ -628,9 +628,14 @@ class SettingsPage(QWidget):
         if self.ctx.puzzles is not None:
             meta = self.ctx.puzzles.meta()
             text = (
-                f"{self.ctx.puzzle_db_path}\n{self.ctx.puzzles.count():,} puzzles, "
+                f"{self.ctx.puzzles.path}\n{self.ctx.puzzles.count():,} puzzles, "
                 f"imported {meta.get('imported_at', '?')}"
             )
+            if self.ctx.using_bundled_db:
+                text += (
+                    " (shipped with the app).\nRebuilding is optional: it writes a fresh "
+                    f"database to {self.ctx.puzzle_db_path}, used from then on."
+                )
         else:
             text = f"{self.ctx.puzzle_db_path}\nNo database yet."
         archive = paths.lichess_archive_path()

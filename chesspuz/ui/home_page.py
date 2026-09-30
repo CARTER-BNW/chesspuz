@@ -223,7 +223,11 @@ class HomePage(QWidget):
             if device.MOBILE:
                 hint = "this build was made without one (bundle it and reinstall)"
             elif getattr(sys, "frozen", False):
-                hint = "open Settings and press Rebuild puzzle database (downloads about 300 MB)"
+                hint = (
+                    "this copy has no puzzles.sqlite next to chesspuz.exe (unzip the whole "
+                    "release again), or open Settings and press Rebuild puzzle database "
+                    "(downloads about 300 MB)"
+                )
             else:
                 hint = "python main.py import --download, or Settings > Rebuild puzzle database"
             self.status_label.setText(f"No puzzle database yet. Build it once: {hint}")

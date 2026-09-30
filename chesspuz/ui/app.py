@@ -33,6 +33,10 @@ class AppContext:
     ``auto_backup`` names a profiles file (see ``chesspuz.backup``) that is rewritten whenever
     runs were recorded: the phone points it at its public Download folder, which survives an
     uninstall of the app.
+
+    ``puzzle_db`` is the database the user builds (Rebuild in Settings writes there);
+    ``bundled_db`` the read-only one a release ships next to the executable, used while no
+    built one exists. Both default to ``chesspuz.paths``.
     """
 
     def __init__(
@@ -40,8 +44,10 @@ class AppContext:
         puzzle_db: Path | None = None,
         user_db: Path | None = None,
         auto_backup: Path | None = None,
+        bundled_db: Path | None = None,
     ) -> None:
         self.puzzle_db_path = Path(puzzle_db) if puzzle_db else paths.puzzle_db_path()
+        self.bundled_db_path = Path(bundled_db) if bundled_db else paths.bundled_puzzle_db_path()
         self.user_db_path = Path(user_db) if user_db else paths.user_db_path()
         self.auto_backup_path = Path(auto_backup) if auto_backup else None
         self._backed_up: tuple[int, int] | None = None
@@ -67,13 +73,21 @@ class AppContext:
         return True
 
     def reopen_puzzles(self) -> bool:
-        """(Re)open the puzzle database; returns whether one is available."""
+        """(Re)open the puzzle database, the built one before the bundled one; returns whether
+        one is available."""
         if self.puzzles is not None:
             self.puzzles.close()
             self.puzzles = None
-        if PuzzleRepository.is_available(self.puzzle_db_path):
-            self.puzzles = PuzzleRepository(self.puzzle_db_path).open()
+        for path in (self.puzzle_db_path, self.bundled_db_path):
+            if path is not None and PuzzleRepository.is_available(path):
+                self.puzzles = PuzzleRepository(path).open()
+                break
         return self.puzzles is not None
+
+    @property
+    def using_bundled_db(self) -> bool:
+        """True while the puzzles come from the database shipped with the app."""
+        return self.puzzles is not None and self.puzzles.path == self.bundled_db_path
 
     def close(self) -> None:
         if self.puzzles is not None:
